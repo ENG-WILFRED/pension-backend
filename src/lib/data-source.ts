@@ -16,4 +16,7 @@ export default new DataSource({
   entities: [User, Transaction],
   migrations: ['dist/migrations/*.js'],
   subscribers: [],
+  ssl: process.env.NODE_ENV === 'production' 
+    ? { rejectUnauthorized: false } 
+    : false,
 });
