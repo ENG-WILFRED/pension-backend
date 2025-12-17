@@ -5,6 +5,7 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './lib/swagger';
 import authRoutes from './routes/auth';
 import paymentRoutes from './routes/payment';
+import dashboardRoutes from './routes/dashboard';
 import healthRoutes from './routes/health';
 
 dotenv.config();
@@ -36,6 +37,7 @@ app.get('/swagger.json', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api', healthRoutes);
 
 // Error handling middleware
