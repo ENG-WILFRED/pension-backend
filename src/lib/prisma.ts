@@ -1,7 +1,7 @@
 // Compatibility wrapper to minimize changes: expose a `prisma`-like API backed by TypeORM
 import AppDataSource from './data-source';
-import { User } from '@/entities/User';
-import { Transaction } from '@/entities/Transaction';
+import { User } from '../entities/User';
+import { Transaction } from '../entities/Transaction';
 
 async function ensureInitialized() {
 	if (!AppDataSource.isInitialized) {
