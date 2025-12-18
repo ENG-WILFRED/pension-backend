@@ -81,7 +81,7 @@ const options = {
             },
             type: {
               type: 'string',
-              enum: ['registration', 'pension_contribution'],
+              enum: ['registration', 'pension_contribution', 'payment'],
             },
             status: {
               type: 'string',
@@ -105,11 +105,15 @@ const options = {
       },
       {
         name: 'Authentication',
-        description: 'User registration and login operations',
+        description: 'User registration, login, and token verification operations',
       },
       {
         name: 'Payments',
-        description: 'Payment and pension contribution operations',
+        description: 'Payment initiation, status checking, and M-Pesa callbacks',
+      },
+      {
+        name: 'Dashboard',
+        description: 'User profile, transactions, and statistics',
       },
     ],
   },
@@ -118,6 +122,10 @@ const options = {
     './src/routes/auth/register.ts',
     './src/routes/auth/login.ts',
     './src/routes/payment/index.ts',
+    './src/routes/payment/handlers/initiate.ts',
+    './src/routes/payment/handlers/status.ts',
+    './src/routes/payment/handlers/callback.ts',
+    './src/routes/dashboard.ts',
   ],
 };
 

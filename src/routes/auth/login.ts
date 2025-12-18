@@ -4,6 +4,145 @@ import prisma from '../../lib/prisma';
 import { comparePasswords, generateToken, verifyToken } from '../../lib/auth';
 import { generateOtp, sendOtpEmail } from '../email/email';
 
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Login with email/username and password
+ *     description: Authenticates user with email or username and password. On 3 failed attempts, sends OTP to email.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - identifier
+ *               - password
+ *             properties:
+ *               identifier:
+ *                 type: string
+ *                 example: user@example.com
+ *               password:
+ *                 type: string
+ *                 example: password123
+ *     responses:
+ *       '200':
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 token:
+ *                   type: string
+ *                   description: JWT authentication token
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     firstName:
+ *                       type: string
+ *                     lastName:
+ *                       type: string
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                     numberOfChildren:
+ *                       type: number
+ *       '401':
+ *         description: Invalid credentials
+ *       '403':
+ *         description: Too many failed login attempts - OTP sent to email
+ *       '500':
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/auth/login/otp:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Login with OTP
+ *     description: Login using OTP code sent to registered email after failed login attempts
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - identifier
+ *               - otp
+ *             properties:
+ *               identifier:
+ *                 type: string
+ *                 example: user@example.com
+ *               otp:
+ *                 type: string
+ *                 minLength: 4
+ *                 example: "123456"
+ *     responses:
+ *       '200':
+ *         description: OTP login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *       '401':
+ *         description: Invalid OTP or credentials
+ *       '500':
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/auth/verify:
+ *   get:
+ *     tags:
+ *       - Authentication
+ *     summary: Verify JWT token
+ *     description: Verifies the validity of a JWT token
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Token is valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 user:
+ *                   type: object
+ *       '401':
+ *         description: Invalid or missing token
+ *       '500':
+ *         description: Internal server error
+ */
+
 const router = Router();
 
 const loginSchema = z.object({
