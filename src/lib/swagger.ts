@@ -10,7 +10,7 @@ const options = {
       description: 'REST API for pension management system with payment integration',
       contact: {
         name: 'API Support',
-        email: 'support@pension-system.com',
+        email: 'kimaniwilfred95@gmail.com',
       },
     },
     servers: [
@@ -19,7 +19,7 @@ const options = {
         description: 'Development server',
       },
       {
-        url: 'https://api.pension-system.com',
+        url: 'https://pension-backend-rs4h.onrender.com',
         description: 'Production server',
       },
     ],
@@ -115,8 +115,9 @@ const options = {
   },
   apis: [
     './src/routes/health.ts',
-    './src/routes/auth.ts',
-    './src/routes/payment.ts',
+    './src/routes/auth/register.ts',
+    './src/routes/auth/login.ts',
+    './src/routes/payment/index.ts',
   ],
 };
 

@@ -7,7 +7,11 @@ const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
 export interface TokenPayload {
   userId: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  age?: number;
 }
+
 
 export async function hashPassword(password: string): Promise<string> {
   const saltRounds = 10;

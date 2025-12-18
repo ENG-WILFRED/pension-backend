@@ -13,7 +13,7 @@ declare global {
 
 /**
  * @swagger
- * /health:
+ * /api/health:
  *   get:
  *     tags:
  *       - Health

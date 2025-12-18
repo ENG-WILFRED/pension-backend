@@ -4,7 +4,7 @@
   "description": "Backend API for pension management system",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node --esm src/index.ts",
+    "dev": "nodemon --watch src --ext ts --exec \"ts-node src/index.ts\"",
     "build": "tsc",
     "start": "node dist/index.js",
     "migration:generate": "npm run build && npx typeorm migration:generate -d ./dist/lib/data-source.js ./src/migrations/Init",
@@ -15,11 +15,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "axios": "^1.6.7",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^7.0.11",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.1.13",
     "swagger-jsdoc": "^6.2.8",
@@ -34,6 +36,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.19.27",
     "@types/swagger-ui-express": "^4.1.8",
+    "nodemon": "^2.0.22",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.3.3"

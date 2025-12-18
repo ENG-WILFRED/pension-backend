@@ -19,6 +19,25 @@ export default {
 			if (where && where.id) return AppDataSource.getRepository(User).findOneBy({ id: where.id });
 			return null;
 		},
+
+		async findFirst({ where }: any): Promise<Maybe<User>> {
+			await ensureInitialized();
+			const repo = AppDataSource.getRepository(User);
+			if (Array.isArray(where)) {
+				const results = await repo.find({ where: where as any } as any);
+				return results[0] ?? null;
+			}
+			if (where && where.email) return repo.findOneBy({ email: where.email });
+			if (where && where.id) return repo.findOneBy({ id: where.id });
+			return null;
+		},
+
+		async update({ where, data }: any): Promise<Maybe<User>> {
+			await ensureInitialized();
+			const repo = AppDataSource.getRepository(User);
+			await repo.update(where, data);
+			return repo.findOneBy(where as any);
+		},
 		async create({ data }: any): Promise<User> {
 			await ensureInitialized();
 			const repo = AppDataSource.getRepository(User);
