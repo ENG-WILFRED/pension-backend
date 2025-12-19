@@ -61,6 +61,10 @@ let mpesaTokenCache: { token: string; expiresAt: number } | null = null;
  *         description: Internal server error
  */
 export const initiatePayment = async (req: Request, res: Response) => {
+  console.log('[M-Pesa Initiate] === STARTING PAYMENT INITIATION ===');
+  console.log('[M-Pesa Initiate] Request body:', req.body);
+  console.log('[M-Pesa Initiate] User:', req.user);
+  
   try {
     const { phone, amount, description, referenceId, accountReference } = req.body;
 
@@ -72,6 +76,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
     }
 
     // Create a pending transaction
+    console.log('[M-Pesa Initiate] Creating pending transaction...');
     const transaction = await prisma.transaction.create({
       data: {
         userId: req.user?.userId || null,
@@ -86,6 +91,8 @@ export const initiatePayment = async (req: Request, res: Response) => {
         },
       },
     });
+
+    console.log('[M-Pesa Initiate] Transaction created:', { id: transaction.id, amount, status: transaction.status });
 
     // Call M-Pesa service to initiate STK Push
     // This is a placeholder - you'll need to implement the actual M-Pesa service
@@ -220,7 +227,8 @@ export const initiatePayment = async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('Payment initiation error:', error);
+    console.error('[M-Pesa Initiate] FATAL ERROR:', error);
+    console.error('[M-Pesa Initiate] Error stack:', (error as any)?.stack);
     res.status(500).json({ success: false, error: 'Failed to initiate payment' });
   }
 };

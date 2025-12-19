@@ -92,6 +92,21 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
       const recentTransactions = await prisma.transaction.findMany({
         where: {
           type: 'payment',
+        },
+        take: 10,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+      
+      console.warn(`[M-Pesa Debug] Found ${recentTransactions.length} total PAYMENT transactions (any status):`);
+      recentTransactions.forEach(t => {
+        console.warn(`  - ID: ${t.id}, status: ${t.status}, checkoutRequestId: ${t.checkoutRequestId}, metadata: ${JSON.stringify(t.metadata)}`);
+      });
+      
+      // Also check all pending transactions regardless of type
+      const allPending = await prisma.transaction.findMany({
+        where: {
           status: 'pending',
         },
         take: 5,
@@ -100,9 +115,9 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
         },
       });
       
-      console.warn(`[M-Pesa Debug] Found ${recentTransactions.length} recent pending PAYMENT transactions:`);
-      recentTransactions.forEach(t => {
-        console.warn(`  - ID: ${t.id}, checkoutRequestId: ${t.checkoutRequestId}, metadata: ${JSON.stringify(t.metadata)}`);
+      console.warn(`[M-Pesa Debug] Found ${allPending.length} total PENDING transactions (any type):`);
+      allPending.forEach(t => {
+        console.warn(`  - ID: ${t.id}, type: ${t.type}, checkoutRequestId: ${t.checkoutRequestId}`);
       });
       
       return res.status(200).json({
