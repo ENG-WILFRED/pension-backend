@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import prisma from '../../../lib/prisma';
 import { purchaseSchema } from '../schemas';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+
+// Token cache
+let mpesaTokenCache: { token: string; expiresAt: number } | null = null;
 
 /**
  * @swagger
@@ -90,30 +93,64 @@ export const initiatePayment = async (req: Request, res: Response) => {
         `${process.env.MPESA_SHORTCODE}${process.env.MPESA_PASSKEY}${timestamp}`
       ).toString('base64');
 
-      const mpesaResponse = await axios.post(
-        'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
-        {
-          BusinessShortCode: process.env.MPESA_SHORTCODE,
-          Password: password,
-          Timestamp: timestamp,
-          TransactionType: 'CustomerPayBillOnline',
-          Amount: amount,
-          PartyA: phone,
-          PartyB: process.env.MPESA_SHORTCODE,
-          PhoneNumber: phone,
-          CallBackURL: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/callback`,
-          AccountReference: accountReference || `TXN-${transaction.id}`,
-          TransactionDesc: description || 'Payment',
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${mpesaToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      let mpesaResponse;
+      let attempt = 0;
+      const maxAttempts = 3;
+      const baseDelay = 1000;
 
-      if (mpesaResponse.data?.CheckoutRequestID) {
+      while (attempt < maxAttempts) {
+        try {
+          mpesaResponse = await axios.post(
+            'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
+            {
+              BusinessShortCode: process.env.MPESA_SHORTCODE,
+              Password: password,
+              Timestamp: timestamp,
+              TransactionType: 'CustomerPayBillOnline',
+              Amount: amount,
+              PartyA: phone,
+              PartyB: process.env.MPESA_SHORTCODE,
+              PhoneNumber: phone,
+              CallBackURL: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/callback`,
+              AccountReference: accountReference || `TXN-${transaction.id}`,
+              TransactionDesc: description || 'Payment',
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${mpesaToken}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: 10000,
+            }
+          );
+          break; // Success, exit retry loop
+        } catch (error: any) {
+          attempt++;
+          const status = error.response?.status;
+
+          if ((status === 429 || status === 503 || status === 504) && attempt < maxAttempts) {
+            const delayMs = baseDelay * Math.pow(2, attempt - 1);
+            console.warn(
+              `[M-Pesa] STK Push request failed with status ${status}. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            continue;
+          }
+
+          if (attempt < maxAttempts && !status) {
+            const delayMs = baseDelay * Math.pow(2, attempt - 1);
+            console.warn(
+              `[M-Pesa] STK Push request failed. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts}): ${error.message}`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            continue;
+          }
+
+          throw error;
+        }
+      }
+
+      if (mpesaResponse?.data?.CheckoutRequestID) {
         // Store M-Pesa response in transaction metadata
         const metadata = (transaction.metadata ?? {}) as any;
         metadata.checkoutRequestId = mpesaResponse.data.CheckoutRequestID;
@@ -131,11 +168,18 @@ export const initiatePayment = async (req: Request, res: Response) => {
           transaction: { id: transaction.id, amount, status: 'pending' },
         });
       }
-    } catch (mpesaError) {
-      console.error('M-Pesa initiation error:', mpesaError);
+    } catch (mpesaError: any) {
+      console.error('M-Pesa initiation error:', mpesaError.message);
+      
+      // Mark transaction as failed if we couldn't initiate
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: { status: 'failed', metadata: { ...transaction.metadata, error: mpesaError.message } },
+      });
+
       return res.status(500).json({
         success: false,
-        error: 'Failed to initiate M-Pesa payment',
+        error: 'Failed to initiate M-Pesa payment. Please try again.',
       });
     }
   } catch (error) {
@@ -144,24 +188,69 @@ export const initiatePayment = async (req: Request, res: Response) => {
   }
 };
 
-// Helper function to get M-Pesa OAuth token
+// Helper function to get M-Pesa OAuth token with caching
 async function getMpesaToken(): Promise<string> {
+  // Return cached token if still valid
+  if (mpesaTokenCache && mpesaTokenCache.expiresAt > Date.now()) {
+    return mpesaTokenCache.token;
+  }
+
   const auth = Buffer.from(
     `${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`
   ).toString('base64');
 
-  try {
-    const response = await axios.get(
-      'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-        },
+  let attempt = 0;
+  const maxAttempts = 3;
+  const baseDelay = 1000; // 1 second
+
+  while (attempt < maxAttempts) {
+    try {
+      const response = await axios.get(
+        'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
+        {
+          headers: {
+            Authorization: `Basic ${auth}`,
+          },
+          timeout: 10000,
+        }
+      );
+
+      const token = response.data.access_token;
+      // M-Pesa tokens typically expire in 3600 seconds, cache for 3500 seconds to be safe
+      mpesaTokenCache = {
+        token,
+        expiresAt: Date.now() + 3500000,
+      };
+
+      return token;
+    } catch (error: any) {
+      attempt++;
+
+      // Check if it's a rate limit error
+      const status = error.response?.status;
+      if (status === 429 && attempt < maxAttempts) {
+        const delayMs = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 1s, 2s, 4s
+        console.warn(
+          `[M-Pesa] Rate limited (429). Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
       }
-    );
-    return response.data.access_token;
-  } catch (error) {
-    console.error('Failed to get M-Pesa token:', error);
-    throw error;
+
+      // For other errors, retry with backoff as well
+      if (attempt < maxAttempts) {
+        const delayMs = baseDelay * Math.pow(2, attempt - 1);
+        console.warn(
+          `[M-Pesa] Token request failed. Retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts}): ${error.message}`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      console.error('Failed to get M-Pesa token after retries:', error.message);
+      throw new Error('Failed to authenticate with M-Pesa service');
+    }
   }
+
+  throw new Error('Failed to get M-Pesa token');
 }
