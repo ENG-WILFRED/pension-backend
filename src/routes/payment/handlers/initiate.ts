@@ -61,10 +61,6 @@ let mpesaTokenCache: { token: string; expiresAt: number } | null = null;
  *         description: Internal server error
  */
 export const initiatePayment = async (req: Request, res: Response) => {
-  console.log('[M-Pesa Initiate] === STARTING PAYMENT INITIATION ===');
-  console.log('[M-Pesa Initiate] Request body:', req.body);
-  console.log('[M-Pesa Initiate] User:', req.user);
-  
   try {
     const { phone, amount, description, referenceId, accountReference } = req.body;
 
@@ -76,8 +72,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
     }
 
     // Create a pending transaction
-    console.log('[M-Pesa Initiate] Creating pending transaction...');
-    const transaction = await prisma.transaction.create({
+    let transaction = await prisma.transaction.create({
       data: {
         userId: req.user?.userId || null,
         amount: Number(amount),
@@ -92,7 +87,19 @@ export const initiatePayment = async (req: Request, res: Response) => {
       },
     });
 
-    console.log('[M-Pesa Initiate] Transaction created:', { id: transaction.id, amount, status: transaction.status });
+    // Generate and persist a local checkoutRequestId so callbacks can always be matched
+    const checkoutRequestId = `CRID-${transaction.id}-${Date.now()}`;
+    const initialMetadata = (transaction.metadata ?? {}) as any;
+    initialMetadata.checkoutRequestId = checkoutRequestId;
+
+    // Save checkoutRequestId and updated metadata on the transaction
+    transaction = await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        checkoutRequestId,
+        metadata: initialMetadata,
+      },
+    });
 
     // Call M-Pesa service to initiate STK Push
     // This is a placeholder - you'll need to implement the actual M-Pesa service
@@ -125,7 +132,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
               PartyB: process.env.MPESA_SHORTCODE,
               PhoneNumber: phone,
               CallBackURL: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/callback`,
-              AccountReference: accountReference || `TXN-${transaction.id}`,
+              AccountReference: accountReference || checkoutRequestId,
               TransactionDesc: description || 'Payment',
             },
             {
@@ -181,7 +188,6 @@ export const initiatePayment = async (req: Request, res: Response) => {
             metadata,
           },
         });
-
         console.log(`[M-Pesa] Transaction ${transaction.id} updated with CheckoutRequestID: ${mpesaResponse.data.CheckoutRequestID}`);
 
         return res.json({
@@ -227,8 +233,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('[M-Pesa Initiate] FATAL ERROR:', error);
-    console.error('[M-Pesa Initiate] Error stack:', (error as any)?.stack);
+    console.error('Payment initiation error:', error);
     res.status(500).json({ success: false, error: 'Failed to initiate payment' });
   }
 };

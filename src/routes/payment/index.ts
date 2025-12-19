@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { authMiddleware } from './middleware';
-import { initiatePayment, getTransactionStatus, handlePaymentCallback } from './handlers';
+import { initiatePayment, getTransactionStatus, handlePaymentCallback, testInitiatePayment } from './handlers';
 
 const router = Router();
+
+// TEST endpoint - no auth required
+router.post('/test-initiate', testInitiatePayment);
 
 // Payment initiation endpoint - requires authentication
 router.post('/initiate', authMiddleware, initiatePayment);
