@@ -75,25 +75,13 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
       });
     }
 
-    // Find transaction by referenceId (we store transactionId as referenceId)
-    // Or search by checking all transactions for matching CheckoutRequestID in metadata
-    let transaction = null;
-
-    // Try to find by querying all pending/processing transactions (limited search)
-    const recentTransactions = await prisma.transaction.findMany({
+    // Find transaction by CheckoutRequestID
+    // Query directly by the checkoutRequestId column for fast, reliable lookup
+    let transaction = await prisma.transaction.findUnique({
       where: {
-        status: 'pending',
+        checkoutRequestId: CheckoutRequestID,
       },
     });
-
-    // Search for transaction with matching CheckoutRequestID in metadata
-    for (const txn of recentTransactions) {
-      const metadata = txn.metadata as any;
-      if (metadata?.checkoutRequestId === CheckoutRequestID) {
-        transaction = txn;
-        break;
-      }
-    }
 
     if (!transaction) {
       console.warn(`Transaction not found for CheckoutRequestID: ${CheckoutRequestID}`);

@@ -151,14 +151,17 @@ export const initiatePayment = async (req: Request, res: Response) => {
       }
 
       if (mpesaResponse?.data?.CheckoutRequestID) {
-        // Store M-Pesa response in transaction metadata
+        // Store M-Pesa response in transaction metadata AND in the dedicated column
         const metadata = (transaction.metadata ?? {}) as any;
         metadata.checkoutRequestId = mpesaResponse.data.CheckoutRequestID;
         metadata.merchantRequestId = mpesaResponse.data.MerchantRequestID;
 
         await prisma.transaction.update({
           where: { id: transaction.id },
-          data: { metadata },
+          data: { 
+            checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
+            metadata,
+          },
         });
 
         return res.json({
