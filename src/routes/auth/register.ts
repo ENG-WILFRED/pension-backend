@@ -338,7 +338,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
     // Initiate M-Pesa STK Push payment
     try {
-      const mpesaInitiateUrl = `${process.env.NEXT_PUBLIC_PAYMENT_GATEWAY_URL || 'http://localhost:3001'}/payment/mpesa/initiate`;
+      const mpesaInitiateUrl = `${process.env.NEXT_PUBLIC_PAYMENT_GATEWAY_URL || 'http://localhost:3001'}/payments/mpesa/initiate`;
       const mpesaResponse = await axios.post(mpesaInitiateUrl, {
         phone,
         amount: 1,
