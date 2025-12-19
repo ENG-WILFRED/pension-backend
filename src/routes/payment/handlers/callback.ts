@@ -77,6 +77,8 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
 
     // Find transaction by CheckoutRequestID
     // Query directly by the checkoutRequestId column for fast, reliable lookup
+    console.log(`[M-Pesa Callback] Searching for transaction with checkoutRequestId: ${CheckoutRequestID}`);
+    
     let transaction = await prisma.transaction.findUnique({
       where: {
         checkoutRequestId: CheckoutRequestID,
@@ -84,12 +86,31 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
     });
 
     if (!transaction) {
-      console.warn(`Transaction not found for CheckoutRequestID: ${CheckoutRequestID}`);
+      console.warn(`[M-Pesa] Transaction not found for CheckoutRequestID: ${CheckoutRequestID}`);
+      
+      // Log all recent transactions to debug
+      const recentTransactions = await prisma.transaction.findMany({
+        where: {
+          status: 'pending',
+        },
+        take: 5,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+      
+      console.warn(`[M-Pesa Debug] Found ${recentTransactions.length} recent pending transactions:`);
+      recentTransactions.forEach(t => {
+        console.warn(`  - ID: ${t.id}, checkoutRequestId: ${t.checkoutRequestId}, metadata: ${JSON.stringify(t.metadata)}`);
+      });
+      
       return res.status(200).json({
         ResultCode: 1,
         ResultDesc: 'Transaction not found',
       });
     }
+    
+    console.log(`[M-Pesa Callback] Transaction found: ${transaction.id}`);
 
     // Determine status based on ResultCode
     // ResultCode: 0 = Success, non-zero = Failed

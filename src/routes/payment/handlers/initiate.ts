@@ -150,13 +150,17 @@ export const initiatePayment = async (req: Request, res: Response) => {
         }
       }
 
+      // Log the full M-Pesa response for debugging
+      console.log('[M-Pesa STK Push Response]', JSON.stringify(mpesaResponse?.data, null, 2));
+
       if (mpesaResponse?.data?.CheckoutRequestID) {
         // Store M-Pesa response in transaction metadata AND in the dedicated column
         const metadata = (transaction.metadata ?? {}) as any;
         metadata.checkoutRequestId = mpesaResponse.data.CheckoutRequestID;
         metadata.merchantRequestId = mpesaResponse.data.MerchantRequestID;
+        metadata.mpesaResponse = mpesaResponse.data;
 
-        await prisma.transaction.update({
+        const updatedTransaction = await prisma.transaction.update({
           where: { id: transaction.id },
           data: { 
             checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
@@ -164,11 +168,34 @@ export const initiatePayment = async (req: Request, res: Response) => {
           },
         });
 
+        console.log(`[M-Pesa] Transaction ${transaction.id} updated with CheckoutRequestID: ${mpesaResponse.data.CheckoutRequestID}`);
+
         return res.json({
           success: true,
           message: 'Payment initiated',
           CheckoutRequestID: mpesaResponse.data.CheckoutRequestID,
           transaction: { id: transaction.id, amount, status: 'pending' },
+        });
+      } else {
+        // M-Pesa didn't return a CheckoutRequestID - this is a problem
+        console.error('[M-Pesa] No CheckoutRequestID in response:', mpesaResponse?.data);
+        
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: { 
+            status: 'failed', 
+            metadata: { 
+              ...transaction.metadata, 
+              error: 'M-Pesa API did not return CheckoutRequestID',
+              mpesaResponse: mpesaResponse?.data,
+            },
+          },
+        });
+
+        return res.status(500).json({
+          success: false,
+          error: 'M-Pesa API did not return a valid CheckoutRequestID. Please try again.',
+          details: mpesaResponse?.data,
         });
       }
     } catch (mpesaError: any) {
