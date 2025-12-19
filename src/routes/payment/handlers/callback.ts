@@ -91,6 +91,7 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
       // Log all recent transactions to debug
       const recentTransactions = await prisma.transaction.findMany({
         where: {
+          type: 'payment',
           status: 'pending',
         },
         take: 5,
@@ -99,7 +100,7 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
         },
       });
       
-      console.warn(`[M-Pesa Debug] Found ${recentTransactions.length} recent pending transactions:`);
+      console.warn(`[M-Pesa Debug] Found ${recentTransactions.length} recent pending PAYMENT transactions:`);
       recentTransactions.forEach(t => {
         console.warn(`  - ID: ${t.id}, checkoutRequestId: ${t.checkoutRequestId}, metadata: ${JSON.stringify(t.metadata)}`);
       });

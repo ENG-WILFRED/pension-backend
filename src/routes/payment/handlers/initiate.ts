@@ -64,7 +64,10 @@ export const initiatePayment = async (req: Request, res: Response) => {
   try {
     const { phone, amount, description, referenceId, accountReference } = req.body;
 
+    console.log('[M-Pesa Initiate] Request received with:', { phone, amount, description, referenceId, accountReference });
+
     if (!phone || !amount) {
+      console.warn('[M-Pesa Initiate] Missing phone or amount');
       return res.status(400).json({ success: false, error: 'Phone and amount are required' });
     }
 
@@ -98,8 +101,11 @@ export const initiatePayment = async (req: Request, res: Response) => {
       const maxAttempts = 3;
       const baseDelay = 1000;
 
+      console.log('[M-Pesa Initiate] Starting STK Push request to M-Pesa...');
+
       while (attempt < maxAttempts) {
         try {
+          console.log(`[M-Pesa Initiate] Attempt ${attempt + 1}/${maxAttempts}`);
           mpesaResponse = await axios.post(
             'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
             {
@@ -123,6 +129,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
               timeout: 10000,
             }
           );
+          console.log('[M-Pesa Initiate] STK Push request successful');
           break; // Success, exit retry loop
         } catch (error: any) {
           attempt++;
