@@ -349,10 +349,11 @@ router.post('/register', async (req: Request, res: Response) => {
       });
 
       if (mpesaResponse.data?.CheckoutRequestID) {
-        // Store CheckoutRequestID for later tracking
+        // Store CheckoutRequestID for later tracking (column + metadata)
         await prisma.transaction.update({
           where: { id: transaction.id },
           data: {
+            checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
             metadata: {
               ...transaction.metadata,
               checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
