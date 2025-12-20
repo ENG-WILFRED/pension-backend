@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../../../lib/prisma';
+import AppDataSource from '../../../lib/data-source';
 
 /**
  * @swagger
@@ -114,11 +115,28 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
       if (transaction) {
         console.log(`[M-Pesa] Found transaction by metadata fallback: ${transaction.id}`);
       } else {
-        console.warn(`[M-Pesa] No transaction matched by metadata for CheckoutRequestID: ${CheckoutRequestID}`);
-        return res.status(200).json({
-          ResultCode: 1,
-          ResultDesc: 'Transaction not found',
-        });
+        console.warn(`[M-Pesa] No transaction matched by metadata for CheckoutRequestID: ${CheckoutRequestID}. Trying JSON query fallback.`);
+
+        // Final fallback: run a DB JSON query (Postgres) to match metadata->>'checkoutRequestId'
+        try {
+          const rows: any = await AppDataSource.query(
+            `SELECT * FROM transactions WHERE metadata->>'checkoutRequestId' = $1 LIMIT 1`,
+            [CheckoutRequestID]
+          );
+          if (Array.isArray(rows) && rows.length > 0) {
+            transaction = rows[0] as any;
+            console.log(`[M-Pesa] Found transaction via JSON query fallback: ${transaction.id}`);
+          }
+        } catch (jsonQueryError) {
+          console.warn('[M-Pesa] JSON query fallback failed:', jsonQueryError?.message || jsonQueryError);
+        }
+
+        if (!transaction) {
+          return res.status(200).json({
+            ResultCode: 1,
+            ResultDesc: 'Transaction not found',
+          });
+        }
       }
     }
     
