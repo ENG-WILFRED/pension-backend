@@ -28,7 +28,7 @@ export class Transaction {
   @Column({ nullable: true, unique: true })
   mpesaCheckoutId?: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: false })
   @Index()
   checkoutRequestId?: string;
 

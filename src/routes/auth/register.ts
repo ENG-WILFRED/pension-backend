@@ -317,12 +317,10 @@ router.post('/register', async (req: Request, res: Response) => {
         transactionDesc: 'Registration Fee',
         stkCallback: `${process.env.BACKEND_URL}/api/payment/callback`,
       });
-      console.log('M-Pesa initiation response:', mpesaResponse?.data);
       if (mpesaResponse) {
         // Ensure we always persist a checkoutRequestId value in the DB. Use provider value when present,
         // otherwise generate a stable fallback id.
         const providerCheckoutId = mpesaResponse.data.data.CheckoutRequestID;
-        console.log('Using providerCheckoutId:', providerCheckoutId, mpesaResponse.data.data.CheckoutRequestID);
         const checkoutId = providerCheckoutId ?? `CRID-${randomUUID()}`;
 
         // Create a pending registration transaction with 1 KES amount and persist checkoutId

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../../../lib/prisma';
+import { randomUUID } from 'crypto';
 import axios from 'axios';
 
 // Token cache
@@ -70,7 +71,10 @@ export const initiatePayment = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Phone and amount are required' });
     }
 
-    // Create a pending transaction
+    // Generate a clientReference before creating the transaction so checkoutRequestId column is never null
+    const clientReference = `CRID-${randomUUID()}`;
+
+    // Create a pending transaction with the clientReference stored in the checkoutRequestId column and metadata
     let transaction = await prisma.transaction.create({
       data: {
         userId: req.user?.userId || null,
@@ -78,25 +82,13 @@ export const initiatePayment = async (req: Request, res: Response) => {
         type: 'payment',
         status: 'pending',
         description: description || 'Payment',
+        checkoutRequestId: clientReference,
         metadata: {
           phone,
           referenceId: referenceId || null,
           accountReference: accountReference || null,
+          clientReference,
         },
-      },
-    });
-
-    // Generate a local client reference so callbacks or frontend can correlate
-    // This is an internal reference only and should NOT overwrite the provider's checkoutRequestId column
-    const clientReference = `CRID-${transaction.id}-${Date.now()}`;
-    const initialMetadata = (transaction.metadata ?? {}) as any;
-    initialMetadata.clientReference = clientReference;
-
-    // Save clientReference only into metadata (do NOT write to checkoutRequestId column)
-    transaction = await prisma.transaction.update({
-      where: { id: transaction.id },
-      data: {
-        metadata: initialMetadata,
       },
     });
 
