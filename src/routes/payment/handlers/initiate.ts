@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../../../lib/prisma';
-import { purchaseSchema } from '../schemas';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 
 // Token cache
 let mpesaTokenCache: { token: string; expiresAt: number } | null = null;
@@ -102,7 +101,6 @@ export const initiatePayment = async (req: Request, res: Response) => {
     });
 
     // Call M-Pesa service to initiate STK Push
-    // This is a placeholder - you'll need to implement the actual M-Pesa service
     try {
       const mpesaToken = await getMpesaToken();
       const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
@@ -198,7 +196,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
         metadata.merchantRequestId = mpesaResponse.data.MerchantRequestID;
         metadata.mpesaResponse = mpesaResponse.data;
 
-        const updatedTransaction = await prisma.transaction.update({
+        await prisma.transaction.update({
           where: { id: transaction.id },
           data: { 
             checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
