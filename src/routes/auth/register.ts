@@ -321,7 +321,8 @@ router.post('/register', async (req: Request, res: Response) => {
       if (mpesaResponse) {
         // Ensure we always persist a checkoutRequestId value in the DB. Use provider value when present,
         // otherwise generate a stable fallback id.
-        const providerCheckoutId = mpesaResponse.data?.CheckoutRequestID;
+        const providerCheckoutId = mpesaResponse.data.CheckoutRequestID;
+        console.log('Using providerCheckoutId:', providerCheckoutId, mpesaResponse.data.CheckoutRequestID);
         const checkoutId = providerCheckoutId ?? `CRID-${randomUUID()}`;
 
         // Create a pending registration transaction with 1 KES amount and persist checkoutId
