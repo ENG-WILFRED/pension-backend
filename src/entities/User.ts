@@ -41,6 +41,10 @@ export class User {
   @Column({ nullable: true })
   maritalStatus?: string;
 
+  // Language preference (en or sw)
+  @Column({ nullable: true })
+  language?: string;
+
   // Spouse data
   @Column({ nullable: true })
   spouseName?: string;
