@@ -347,7 +347,7 @@ router.post('/register', async (req: Request, res: Response) => {
         transactionDesc: 'Registration Fee',
         stkCallback: `${process.env.BACKEND_URL}/api/payment/callback`,
       });
-console.log('M-Pesa initiation response:', mpesaResponse);
+console.log('M-Pesa initiation response:', mpesaResponse?.data);
       if (mpesaResponse) {
         // Store CheckoutRequestID for later tracking (column + metadata)
         await prisma.transaction.update({
