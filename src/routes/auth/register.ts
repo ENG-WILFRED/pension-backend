@@ -305,58 +305,48 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Email already registered' });
     }
 
-    // Create a pending registration transaction with 1 KES amount
-    const transaction = await prisma.transaction.create({
-      data: {
-        amount: 1,
-        status: 'pending',
-        type: 'registration',
-        metadata: {
-          email,
-          hashedPassword: await hashPassword(password),
-          phone,
-          firstName,
-          lastName,
-          dateOfBirth,
-          gender,
-          maritalStatus,
-          spouseName,
-          spouseDob,
-          children,
-          nationalId,
-          address,
-          city,
-          country,
-          occupation,
-          employer,
-          salary,
-          contributionRate,
-          retirementAge,
-        },
-      },
-    });
-
     // Initiate M-Pesa STK Push payment
     try {
       const mpesaInitiateUrl = `${process.env.NEXT_PUBLIC_PAYMENT_GATEWAY_URL || 'http://localhost:3001'}/payments/mpesa/initiate`;
       const mpesaResponse = await axios.post(mpesaInitiateUrl, {
         phone,
         amount: 1,
-        referenceId: transaction.id,
+        referenceId: `Ref-${email}`,
         accountReference: `REG-${email}`,
         transactionDesc: 'Registration Fee',
         stkCallback: `${process.env.BACKEND_URL}/api/payment/callback`,
       });
-console.log('M-Pesa initiation response:', mpesaResponse?.data);
+      console.log('M-Pesa initiation response:', mpesaResponse?.data);
       if (mpesaResponse) {
-        // Store CheckoutRequestID for later tracking (column + metadata)
-        await prisma.transaction.update({
-          where: { id: transaction.id },
+
+        // Create a pending registration transaction with 1 KES amount
+        const transaction = await prisma.transaction.create({
           data: {
+            amount: 1,
             checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
+            status: 'pending',
+            type: 'registration',
             metadata: {
-              ...transaction.metadata,
-              checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
+              email,
+              hashedPassword: await hashPassword(password),
+              phone,
+              firstName,
+              lastName,
+              dateOfBirth,
+              gender,
+              maritalStatus,
+              spouseName,
+              spouseDob,
+              children,
+              nationalId,
+              address,
+              city,
+              country,
+              occupation,
+              employer,
+              salary,
+              contributionRate,
+              retirementAge,
             },
           },
         });
