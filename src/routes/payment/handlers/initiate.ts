@@ -86,16 +86,16 @@ export const initiatePayment = async (req: Request, res: Response) => {
       },
     });
 
-    // Generate and persist a local checkoutRequestId so callbacks can always be matched
-    const checkoutRequestId = `CRID-${transaction.id}-${Date.now()}`;
+    // Generate a local client reference so callbacks or frontend can correlate
+    // This is an internal reference only and should NOT overwrite the provider's checkoutRequestId column
+    const clientReference = `CRID-${transaction.id}-${Date.now()}`;
     const initialMetadata = (transaction.metadata ?? {}) as any;
-    initialMetadata.checkoutRequestId = checkoutRequestId;
+    initialMetadata.clientReference = clientReference;
 
-    // Save checkoutRequestId and updated metadata on the transaction
+    // Save clientReference only into metadata (do NOT write to checkoutRequestId column)
     transaction = await prisma.transaction.update({
       where: { id: transaction.id },
       data: {
-        checkoutRequestId,
         metadata: initialMetadata,
       },
     });
@@ -130,7 +130,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
               PartyB: process.env.MPESA_SHORTCODE,
               PhoneNumber: phone,
               CallBackURL: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/callback`,
-              AccountReference: accountReference || checkoutRequestId,
+              AccountReference: accountReference || clientReference,
               TransactionDesc: description || 'Payment',
             },
             {
