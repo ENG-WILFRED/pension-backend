@@ -90,11 +90,9 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
     if (!transaction) {
       console.warn(`[M-Pesa] Transaction not found by column for CheckoutRequestID: ${CheckoutRequestID}. Falling back to metadata search.`);
 
+      // Search recent transactions regardless of status to increase chance of matching
       const candidates = await prisma.transaction.findMany({
-        where: {
-          status: 'pending',
-        },
-        take: 200,
+        take: 500,
         orderBy: { createdAt: 'desc' },
       });
 
