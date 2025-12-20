@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../../lib/prisma';
+import { randomUUID } from 'crypto';
 import { hashPassword } from '../../lib/auth';
 import axios from 'axios';
 
@@ -318,12 +319,16 @@ router.post('/register', async (req: Request, res: Response) => {
       });
       console.log('M-Pesa initiation response:', mpesaResponse?.data);
       if (mpesaResponse) {
+        // Ensure we always persist a checkoutRequestId value in the DB. Use provider value when present,
+        // otherwise generate a stable fallback id.
+        const providerCheckoutId = mpesaResponse.data?.CheckoutRequestID;
+        const checkoutId = providerCheckoutId ?? `CRID-${randomUUID()}`;
 
-        // Create a pending registration transaction with 1 KES amount
+        // Create a pending registration transaction with 1 KES amount and persist checkoutId
         const transaction = await prisma.transaction.create({
           data: {
             amount: 1,
-            checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
+            checkoutRequestId: checkoutId,
             status: 'pending',
             type: 'registration',
             metadata: {
@@ -350,14 +355,17 @@ router.post('/register', async (req: Request, res: Response) => {
             },
           },
         });
-        console.log(res)
+
+        // Confirm the value was saved and log it for debugging
+        const saved = await prisma.transaction.findUnique({ where: { id: transaction.id } });
+        console.log('[Register] Created transaction', { id: transaction.id, checkoutRequestId: saved?.checkoutRequestId });
 
         return res.json({
           success: true,
           status: 'payment_initiated',
           message: 'Payment initiated. Please check your phone for the M-Pesa prompt.',
           transactionId: transaction.id,
-          checkoutRequestId: mpesaResponse.data.CheckoutRequestID,
+          checkoutRequestId: checkoutId,
           statusCheckUrl: `/api/auth/register/status/${transaction.id}`,
         });
       }
