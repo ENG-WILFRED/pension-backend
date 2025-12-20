@@ -76,54 +76,52 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
     }
 
     // Find transaction by CheckoutRequestID
-    // Query directly by the checkoutRequestId column for fast, reliable lookup
     console.log(`[M-Pesa Callback] Searching for transaction with checkoutRequestId: ${CheckoutRequestID}`);
-    
+
+    // Try direct column lookup first (fast path)
     let transaction = await prisma.transaction.findUnique({
       where: {
         checkoutRequestId: CheckoutRequestID,
       },
     });
 
+    // Fallback: some flows store the provider's CheckoutRequestID inside metadata
+    // If the direct lookup failed, search recent pending transactions and match metadata in JS
     if (!transaction) {
-      console.warn(`[M-Pesa] Transaction not found for CheckoutRequestID: ${CheckoutRequestID}`);
-      
-      // Log all recent transactions to debug
-      const recentTransactions = await prisma.transaction.findMany({
-        where: {
-          type: 'payment',
-        },
-        take: 10,
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-      
-      console.warn(`[M-Pesa Debug] Found ${recentTransactions.length} total PAYMENT transactions (any status):`);
-      recentTransactions.forEach(t => {
-        console.warn(`  - ID: ${t.id}, status: ${t.status}, checkoutRequestId: ${t.checkoutRequestId}, metadata: ${JSON.stringify(t.metadata)}`);
-      });
-      
-      // Also check all pending transactions regardless of type
-      const allPending = await prisma.transaction.findMany({
+      console.warn(`[M-Pesa] Transaction not found by column for CheckoutRequestID: ${CheckoutRequestID}. Falling back to metadata search.`);
+
+      const candidates = await prisma.transaction.findMany({
         where: {
           status: 'pending',
         },
-        take: 5,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        take: 200,
+        orderBy: { createdAt: 'desc' },
       });
-      
-      console.warn(`[M-Pesa Debug] Found ${allPending.length} total PENDING transactions (any type):`);
-      allPending.forEach(t => {
-        console.warn(`  - ID: ${t.id}, type: ${t.type}, checkoutRequestId: ${t.checkoutRequestId}`);
-      });
-      
-      return res.status(200).json({
-        ResultCode: 1,
-        ResultDesc: 'Transaction not found',
-      });
+
+      transaction = candidates.find((t) => {
+        try {
+          const md = (t.metadata ?? {}) as any;
+          // check common metadata keys that may contain the CheckoutRequestID
+          return (
+            md?.checkoutRequestId === CheckoutRequestID ||
+            md?.mpesaCheckoutRequestID === CheckoutRequestID ||
+            md?.CheckoutRequestID === CheckoutRequestID ||
+            md?.checkoutRequestID === CheckoutRequestID
+          );
+        } catch (_e) {
+          return false;
+        }
+      }) as any;
+
+      if (transaction) {
+        console.log(`[M-Pesa] Found transaction by metadata fallback: ${transaction.id}`);
+      } else {
+        console.warn(`[M-Pesa] No transaction matched by metadata for CheckoutRequestID: ${CheckoutRequestID}`);
+        return res.status(200).json({
+          ResultCode: 1,
+          ResultDesc: 'Transaction not found',
+        });
+      }
     }
     
     console.log(`[M-Pesa Callback] Transaction found: ${transaction.id}`);
