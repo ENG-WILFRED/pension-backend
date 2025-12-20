@@ -112,7 +112,7 @@ export const initiatePayment = async (req: Request, res: Response) => {
 
       let mpesaResponse;
       let attempt = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 2; // reduce retries to avoid long waits
       const baseDelay = 1000;
 
       console.log('[M-Pesa Initiate] Starting STK Push request to M-Pesa...');
@@ -173,6 +173,23 @@ export const initiatePayment = async (req: Request, res: Response) => {
 
       // Log the full M-Pesa response for debugging
       console.log('[M-Pesa STK Push Response]', JSON.stringify(mpesaResponse?.data, null, 2));
+
+      // If after retries we still have no response, fail fast and respond to the client
+      if (!mpesaResponse) {
+        console.error('[M-Pesa] No response after retries; marking transaction failed');
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'failed',
+            metadata: { ...transaction.metadata, error: 'No response from M-Pesa after retries' },
+          },
+        });
+
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to initiate M-Pesa payment after retries',
+        });
+      }
 
       if (mpesaResponse?.data?.CheckoutRequestID) {
         // Store M-Pesa response in transaction metadata AND in the dedicated column
