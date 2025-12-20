@@ -10,8 +10,8 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *   post:
  *     tags:
  *       - Authentication
- *     summary: Login with email/username and password
- *     description: Authenticates user with email or username and password. On 3 failed attempts, sends OTP to email.
+ *     summary: Login with email, username, or phone and password
+ *     description: Authenticates user with email, username, or phone number and password. On 3 failed attempts, sends OTP to email.
  *     requestBody:
  *       required: true
  *       content:
@@ -24,7 +24,8 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *             properties:
  *               identifier:
  *                 type: string
- *                 example: user@example.com
+ *                 description: User's email, username, or phone number
+ *                 example: "+254712345678"
  *               password:
  *                 type: string
  *                 example: password123
@@ -73,7 +74,7 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *     tags:
  *       - Authentication
  *     summary: Login with OTP
- *     description: Login using OTP code sent to registered email after failed login attempts
+ *     description: Login using OTP code sent to registered email after failed login attempts. Identifier can be email, username, or phone.
  *     requestBody:
  *       required: true
  *       content:
@@ -86,7 +87,8 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *             properties:
  *               identifier:
  *                 type: string
- *                 example: user@example.com
+ *                 description: User's email, username, or phone number
+ *                 example: "+254712345678"
  *               otp:
  *                 type: string
  *                 minLength: 4
@@ -177,8 +179,8 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const { identifier, password } = validation.data;
 
-    // Find user by email or username
-    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { username: identifier }] });
+    // Find user by email, username, or phone
+    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { username: identifier }, { phone: identifier }] });
     if (!user) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
@@ -227,7 +229,7 @@ router.post('/login/otp', async (req: Request, res: Response) => {
     }
 
     const { identifier, otp } = validation.data;
-    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { username: identifier }] });
+    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { username: identifier }, { phone: identifier }] });
     if (!user || !user.otpCode) {
       return res.status(401).json({ success: false, error: 'Invalid OTP or credentials' });
     }
