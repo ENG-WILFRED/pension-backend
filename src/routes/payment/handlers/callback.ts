@@ -182,6 +182,66 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
       `[M-Pesa Callback] Transaction ${transaction.id} updated to status: ${status}`,
     );
 
+    // If this was a registration transaction and succeeded, create the user from metadata
+    try {
+      if (status === 'completed' && (updated.type === 'registration' || transaction.type === 'registration')) {
+        const meta = (updated.metadata ?? {}) as any;
+        const email = meta.email as string | undefined;
+        const hashedPassword = meta.hashedPassword as string | undefined;
+
+        if (email && hashedPassword) {
+          // Build user payload from metadata
+          const children = Array.isArray(meta.children) ? meta.children : undefined;
+          const numberOfChildren = Array.isArray(children) ? children.length : null;
+
+          const userData: any = {
+            email,
+            password: hashedPassword,
+            firstName: meta.firstName || null,
+            lastName: meta.lastName || null,
+            phone: meta.phone || null,
+            dateOfBirth: meta.dateOfBirth || null,
+            gender: meta.gender || null,
+            maritalStatus: meta.maritalStatus || null,
+            spouseName: meta.spouseName || null,
+            spouseDob: meta.spouseDob || null,
+            children: children || null,
+            numberOfChildren: numberOfChildren,
+            nationalId: meta.nationalId || null,
+            address: meta.address || null,
+            city: meta.city || null,
+            country: meta.country || null,
+            occupation: meta.occupation || null,
+            employer: meta.employer || null,
+            salary: typeof meta.salary === 'string' ? Number(meta.salary) : meta.salary ?? null,
+            contributionRate: typeof meta.contributionRate === 'string' ? Number(meta.contributionRate) : meta.contributionRate ?? null,
+            retirementAge: typeof meta.retirementAge === 'string' ? Number(meta.retirementAge) : meta.retirementAge ?? null,
+          };
+
+          // Idempotent create-or-update: if user exists update, otherwise create
+          let user = await prisma.user.findUnique({ where: { email } });
+          if (!user) {
+            user = await prisma.user.create({ data: userData });
+            console.log(`[M-Pesa Callback] Created user ${user.id} for registration transaction ${transaction.id}`);
+          } else {
+            await prisma.user.update({ where: { email }, data: userData });
+            console.log(`[M-Pesa Callback] Updated existing user ${user.id} with registration metadata`);
+            user = await prisma.user.findUnique({ where: { email } });
+          }
+
+          // Ensure transaction links to the user
+          if (user && !updated.userId) {
+            await prisma.transaction.update({ where: { id: transaction.id }, data: { userId: user.id } });
+            console.log(`[M-Pesa Callback] Linked transaction ${transaction.id} to user ${user.id}`);
+          }
+        } else {
+          console.warn(`[M-Pesa Callback] Registration metadata missing email/hashedPassword for transaction ${transaction.id}`);
+        }
+      }
+    } catch (userErr) {
+      console.error('[M-Pesa Callback] Error creating/linking user from registration metadata:', userErr);
+    }
+
     // Return M-Pesa compliant response
     res.status(200).json({
       ResultCode: 0,
