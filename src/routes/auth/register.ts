@@ -360,6 +360,7 @@ console.log('M-Pesa initiation response:', mpesaResponse);
             },
           },
         });
+        console.log(res)
 
         return res.json({
           success: true,
