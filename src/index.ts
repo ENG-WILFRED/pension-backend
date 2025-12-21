@@ -17,8 +17,8 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: FRONTEND_URL,
-  credentials: true,
+  origin: '*',
+  credentials: false,
 }));
 
 // Swagger documentation
