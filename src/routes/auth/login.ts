@@ -192,17 +192,18 @@ router.post('/login', async (req: Request, res: Response) => {
       const attempts = (user.failedLoginAttempts || 0) + 1;
       const updates: any = { failedLoginAttempts: attempts };
 
-      if (attempts >= 3) {
-        // generate OTP, save and send
-        const otp = generateOtp(6);
-        const expiry = new Date(Date.now() + 10 * 60 * 1000);
-        updates.otpCode = otp;
-        updates.otpExpiry = expiry;
-        await prisma.user.update({ where: { id: user.id }, data: updates });
-        // send OTP to user's email (fire-and-forget)
-        sendOtpEmail(user.email, otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP email', e));
-        return res.status(403).json({ success: false, error: 'Too many failed attempts. An OTP has been sent to your registered email.' });
-      }
+      // DISABLED: OTP feature disabled for login attempts
+      // if (attempts >= 3) {
+      //   // generate OTP, save and send
+      //   const otp = generateOtp(6);
+      //   const expiry = new Date(Date.now() + 10 * 60 * 1000);
+      //   updates.otpCode = otp;
+      //   updates.otpExpiry = expiry;
+      //   await prisma.user.update({ where: { id: user.id }, data: updates });
+      //   // send OTP to user's email (fire-and-forget)
+      //   sendOtpEmail(user.email, otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP email', e));
+      //   return res.status(403).json({ success: false, error: 'Too many failed attempts. An OTP has been sent to your registered email.' });
+      // }
 
       await prisma.user.update({ where: { id: user.id }, data: updates });
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
