@@ -56,7 +56,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const caller = await prisma.user.findUnique({ where: { id: callerId } });
     if (!caller) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-    if (caller.role !== 'admin' && callerId !== id) {
+    if ( callerId !== id) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 

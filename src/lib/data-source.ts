@@ -8,6 +8,12 @@ dotenv.config();
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
+// Determine whether to enable SSL for the Postgres connection.
+// Some hosted Postgres providers require SSL even in non-production environments.
+const dbUrlIncludesSsl = DATABASE_URL ? DATABASE_URL.includes('sslmode=require') || DATABASE_URL.includes('sslmode=verify-full') : false;
+const envRequestsSsl = (process.env.DB_SSL || process.env.PGSSLMODE) === 'true' || process.env.PGSSLMODE === 'require' || process.env.PGSSLMODE === 'verify-full';
+const enableSsl = process.env.NODE_ENV === 'production' || dbUrlIncludesSsl || envRequestsSsl;
+
 export default new DataSource({
   type: 'postgres',
   url: DATABASE_URL,
@@ -16,7 +22,5 @@ export default new DataSource({
   entities: [User, Transaction],
   migrations: ['dist/migrations/*.js'],
   subscribers: [],
-  ssl: process.env.NODE_ENV === 'production' 
-    ? { rejectUnauthorized: false } 
-    : false,
+  ssl: enableSsl ? { rejectUnauthorized: false } : false,
 });
