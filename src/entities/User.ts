@@ -98,6 +98,10 @@ export class User {
   @Column({ type: 'int', nullable: true })
   retirementAge?: number;
 
+  // Role: 'customer' or 'admin' - new column. Default to 'customer' for all registrations.
+  @Column({ default: 'customer' })
+  role!: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

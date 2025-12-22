@@ -120,6 +120,8 @@ const options = {
   apis: [
     './src/routes/health.ts',
     './src/routes/auth/register.ts',
+      './src/routes/auth/promote.ts',
+      './src/routes/users.ts',
     './src/routes/auth/login.ts',
     './src/routes/payment/index.ts',
     './src/routes/payment/handlers/initiate.ts',

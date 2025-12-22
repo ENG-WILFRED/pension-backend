@@ -1,38 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
-import { verifyToken, TokenPayload } from '../lib/auth';
+import requireAuth, { AuthRequest } from '../middleware/auth';
 
 const router = Router();
-
-// Middleware to verify authentication
-const authMiddleware = (req: Request, res: Response, next: Function) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ success: false, error: 'No authorization header' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return res.status(401).json({ success: false, error: 'Invalid token' });
-    }
-
-    req.user = payload;
-    next();
-  } catch (error) {
-    res.status(401).json({ success: false, error: 'Unauthorized' });
-  }
-};
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: TokenPayload;
-    }
-  }
-}
 
 /**
  * @swagger
@@ -68,14 +38,14 @@ declare global {
  *       401:
  *         description: Not authenticated or invalid token
  */
-router.get('/user', authMiddleware, async (req: Request, res: Response) => {
+router.get('/user', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ success: false, error: 'Not authenticated' });
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
+      where: { id: (req.user as any).userId },
       select: {
         id: true,
         email: true,
@@ -124,7 +94,7 @@ router.get('/user', authMiddleware, async (req: Request, res: Response) => {
  *       401:
  *         description: Not authenticated or invalid token
  */
-router.get('/transactions', authMiddleware, async (req: Request, res: Response) => {
+router.get('/transactions', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ success: false, error: 'Not authenticated' });
@@ -172,7 +142,7 @@ router.get('/transactions', authMiddleware, async (req: Request, res: Response) 
  *       401:
  *         description: Not authenticated or invalid token
  */
-router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
+router.get('/stats', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ success: false, error: 'Not authenticated' });

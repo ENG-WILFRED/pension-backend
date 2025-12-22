@@ -459,6 +459,8 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
             salary: salary || null,
             contributionRate: contributionRate || null,
             retirementAge: retirementAge || null,
+            // Ensure new registrations are customers by default
+            role: 'customer',
           },
         });
       }

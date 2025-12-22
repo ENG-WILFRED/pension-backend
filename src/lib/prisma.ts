@@ -38,6 +38,14 @@ export default {
 			await repo.update(where, data);
 			return repo.findOneBy(where as any);
 		},
+		async delete({ where }: any): Promise<Maybe<User>> {
+			await ensureInitialized();
+			const repo = AppDataSource.getRepository(User);
+			const entity = await repo.findOneBy(where as any);
+			if (!entity) return null;
+			await repo.remove(entity as any);
+			return entity as any;
+		},
 		async create({ data }: any): Promise<User> {
 			await ensureInitialized();
 			const repo = AppDataSource.getRepository(User);
