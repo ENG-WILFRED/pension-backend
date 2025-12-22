@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { User } from '../entities/User';
 import { Transaction } from '../entities/Transaction';
+import { Account } from '../entities/Account';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -19,7 +20,7 @@ export default new DataSource({
   url: DATABASE_URL,
   synchronize: false,
   logging: false,
-  entities: [User, Transaction],
+  entities: [User, Transaction, Account],
   migrations: ['dist/migrations/*.js'],
   subscribers: [],
   ssl: enableSsl ? { rejectUnauthorized: false } : false,

@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { User } from './User';
+import { Account } from './Account';
 
 @Entity({ name: 'transactions' })
 export class Transaction {
@@ -12,6 +13,13 @@ export class Transaction {
 
   @ManyToOne(() => User, (user: { transactions: any; }) => user.transactions, { onDelete: 'CASCADE' })
   user?: User;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  accountId?: string;
+
+  @ManyToOne(() => Account, (account) => account.transactions, { onDelete: 'CASCADE' })
+  account?: Account;
 
   @Column('double precision')
   amount!: number;

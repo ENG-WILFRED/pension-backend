@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Transaction } from './Transaction';
+import { Account } from './Account';
 
 @Entity({ name: 'users' })
 export class User {
@@ -98,6 +99,19 @@ export class User {
   @Column({ type: 'int', nullable: true })
   retirementAge?: number;
 
+  // ========== KRA & NSSF Fields ==========
+  @Column({ unique: true, nullable: true })
+  kraPin?: string;
+
+  @Column({ unique: true, nullable: true })
+  nssfNumber?: string;
+
+  @Column({ type: 'boolean', default: false })
+  kraVerified!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  nssfVerified!: boolean;
+
   // Role: 'customer' or 'admin' - new column. Default to 'customer' for all registrations.
   @Column({ default: 'customer' })
   role!: string;
@@ -110,4 +124,7 @@ export class User {
 
   @OneToMany(() => Transaction, (transaction) => transaction.user)
   transactions!: Transaction[];
+
+  @OneToMany(() => Account, (account) => account.user)
+  accounts!: Account[];
 }
