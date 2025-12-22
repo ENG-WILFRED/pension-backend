@@ -3,6 +3,9 @@ import { getTokenFromHeader, verifyToken } from '../lib/auth';
 
 export interface AuthRequest extends Request {
   user?: any;
+  headers: Request['headers'];
+  params: Request['params'];
+  body: Request['body'];
 }
 
 export default function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
