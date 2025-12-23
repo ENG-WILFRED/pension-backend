@@ -92,7 +92,8 @@ import { hashPassword } from '../../lib/auth';
  *                 description: Required only for first-time login when the account used a temporary password
  *     responses:
  *       '200':
- *         description: Two possible successful outcomes:
+ *         description: |
+ *           Two possible successful outcomes:
  *           1) OTP valid and client should set a permanent password (temporary account).
  *           2) OTP validated and token + user data returned (login complete).
  *         content:
