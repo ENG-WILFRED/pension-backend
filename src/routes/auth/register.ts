@@ -236,7 +236,7 @@ const childSchema = z.object({
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  username: z.string().min(1, 'Username is required'),
   phone: z.string().min(1, 'Phone number is required for payment'),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -279,7 +279,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const {
       email,
-      password,
+      username,
       phone,
       firstName,
       lastName,
@@ -300,11 +300,11 @@ router.post('/register', async (req: Request, res: Response) => {
       retirementAge,
     } = validation.data;
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ success: false, error: 'Email already registered' });
-    }
+    // Check if user already exists by email or username
+    const existingByEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingByEmail) return res.status(400).json({ success: false, error: 'Email already registered' });
+    const existingByUsername = (await prisma.user.findMany({ where: { username } }))?.[0];
+    if (existingByUsername) return res.status(400).json({ success: false, error: 'Username already taken' });
 
     // Initiate M-Pesa STK Push payment
     try {
@@ -324,6 +324,10 @@ router.post('/register', async (req: Request, res: Response) => {
         const checkoutId = providerCheckoutId ?? `CRID-${randomUUID()}`;
 
         // Create a pending registration transaction with 1 KES amount and persist checkoutId
+        // generate a temporary password and store its hash in metadata
+        const tempPassword = Math.random().toString(36).slice(2, 10); // 8 char temporary password
+        const hashedTempPassword = await hashPassword(tempPassword);
+
         const transaction = await prisma.transaction.create({
           data: {
             amount: 1,
@@ -332,7 +336,9 @@ router.post('/register', async (req: Request, res: Response) => {
             type: 'registration',
             metadata: {
               email,
-              hashedPassword: await hashPassword(password),
+              username,
+              hashedTemporaryPassword: hashedTempPassword,
+              temporaryPasswordPlain: tempPassword,
               phone,
               firstName,
               lastName,
@@ -397,11 +403,13 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
     }
 
     // If payment completed, automatically complete registration
-    if (transaction.status === 'completed' && transaction.type === 'registration') {
+      if (transaction.status === 'completed' && transaction.type === 'registration') {
       const metadata = (transaction.metadata ?? {}) as any;
       const {
         email,
-        hashedPassword,
+        username,
+        hashedTemporaryPassword,
+        temporaryPasswordPlain,
         firstName,
         lastName,
         phone,
@@ -422,7 +430,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
         retirementAge,
       } = metadata;
 
-      if (!email || !hashedPassword) {
+      if (!email || !hashedTemporaryPassword) {
         return res.status(400).json({
           success: false,
           status: 'payment_completed',
@@ -435,11 +443,13 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
 
       // Create user if doesn't exist
       let user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
+        if (!user) {
         user = await prisma.user.create({
           data: {
             email,
-            password: hashedPassword,
+            username,
+            password: hashedTemporaryPassword,
+            passwordIsTemporary: true,
             firstName,
             lastName,
             phone,
@@ -466,6 +476,17 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
       }
 
       // Link transaction to user
+
+        // send temporary password to user via notification service (best-effort)
+        try {
+          const { sendOtpNotification } = await import('../../lib/notification');
+          if (temporaryPasswordPlain) {
+            // send as OTP-style notification
+            await sendOtpNotification(email, 'welcome', 'email', temporaryPasswordPlain, firstName, 60);
+          }
+        } catch (e) {
+          console.error('Failed sending temporary password notification', e);
+        }
       await prisma.transaction.update({ where: { id: transactionId }, data: { userId: user.id } });
 
       // Generate token

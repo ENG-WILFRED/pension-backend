@@ -2,7 +2,10 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../../lib/prisma';
 import { comparePasswords, generateToken, verifyToken } from '../../lib/auth';
-import { generateOtp, sendOtpEmail } from '../email/email';
+import { generateOtp } from '../../lib/otp';
+import { sendOtpNotification } from '../../lib/notification';
+import requireAuth, { AuthRequest } from '../../middleware/auth';
+import { hashPassword } from '../../lib/auth';
 
 /**
  * @swagger
@@ -10,8 +13,12 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *   post:
  *     tags:
  *       - Authentication
- *     summary: Login with email, username, or phone and password
- *     description: Authenticates user with email, username, or phone number and password. On 3 failed attempts, sends OTP to email.
+ *     summary: Start login — verify password and send OTP
+ *     description: |
+ *       Step 1 of a two-step authentication flow. The client POSTS an identifier and password.
+ *       If the password is valid, the server generates a one-time code (OTP), stores it on the user,
+ *       and sends the OTP via the Notification Service to the user's email. No token or user data
+ *       is returned by this endpoint — tokens are issued only after OTP verification.
  *     requestBody:
  *       required: true
  *       content:
@@ -31,7 +38,7 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *                 example: password123
  *     responses:
  *       '200':
- *         description: Login successful
+ *         description: OTP sent to user (acknowledgement)
  *         content:
  *           application/json:
  *             schema:
@@ -40,29 +47,13 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *                 success:
  *                   type: boolean
  *                   example: true
- *                 token:
+ *                 message:
  *                   type: string
- *                   description: JWT authentication token
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     firstName:
- *                       type: string
- *                     lastName:
- *                       type: string
- *                     dateOfBirth:
- *                       type: string
- *                       format: date
- *                     numberOfChildren:
- *                       type: number
+ *                   example: "OTP sent to your email"
  *       '401':
  *         description: Invalid credentials
- *       '403':
- *         description: Too many failed login attempts - OTP sent to email
+ *       '400':
+ *         description: Bad request (validation error)
  *       '500':
  *         description: Internal server error
  */
@@ -73,8 +64,13 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *   post:
  *     tags:
  *       - Authentication
- *     summary: Login with OTP
- *     description: Login using OTP code sent to registered email after failed login attempts. Identifier can be email, username, or phone.
+ *     summary: Verify OTP and complete login
+ *     description: |
+ *       Step 2 of login. Verifies the OTP sent to the user. For first-time logins where the
+ *       account uses a temporary password, the client should include `newPassword` in the
+ *       request to set a permanent password. If `newPassword` is omitted for a temporary
+ *       account, the endpoint will respond with a `temporary: true` acknowledgement prompting
+ *       the client to collect a new password and call the endpoint again with the same OTP.
  *     requestBody:
  *       required: true
  *       content:
@@ -88,30 +84,79 @@ import { generateOtp, sendOtpEmail } from '../email/email';
  *               identifier:
  *                 type: string
  *                 description: User's email, username, or phone number
- *                 example: "+254712345678"
  *               otp:
  *                 type: string
- *                 minLength: 4
  *                 example: "123456"
+ *               newPassword:
+ *                 type: string
+ *                 description: Required only for first-time login when the account used a temporary password
  *     responses:
  *       '200':
- *         description: OTP login successful
+ *         description: Two possible successful outcomes:
+ *           1) OTP valid and client should set a permanent password (temporary account).
+ *           2) OTP validated and token + user data returned (login complete).
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                 token:
- *                   type: string
- *                 user:
- *                   type: object
+ *               oneOf:
+ *                 - type: object
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                       example: true
+ *                     temporary:
+ *                       type: boolean
+ *                       example: true
+ *                     message:
+ *                       type: string
+ *                       example: "OTP valid. Please set a permanent password by providing `newPassword` in this endpoint."
+ *                 - type: object
+ *                   properties:
+ *                     success:
+ *                       type: boolean
+ *                       example: true
+ *                     message:
+ *                       type: string
+ *                     token:
+ *                       type: string
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
  *       '401':
  *         description: Invalid OTP or credentials
+ *       '400':
+ *         description: Bad request (validation error)
+ *       '500':
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/auth/set-password:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Set or change a permanent password (authenticated)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *     responses:
+ *       '200':
+ *         description: Password set successfully
+ *       '401':
+ *         description: Unauthorized
+ *       '400':
+ *         description: Validation error
  *       '500':
  *         description: Internal server error
  */
@@ -157,6 +202,10 @@ const otpLoginSchema = z.object({
   otp: z.string().min(4, 'OTP is required'),
 });
 
+const otpVerifySchema = otpLoginSchema.extend({
+  newPassword: z.string().min(6).optional(),
+});
+
 function computeAge(dob?: string | null): number | undefined {
   if (!dob) return undefined;
   const d = new Date(dob);
@@ -186,35 +235,41 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Verify password
-    const passwordMatch = await comparePasswords(password, user.password);
+    const passwordMatch = await comparePasswords(password, user.password || '');
     if (!passwordMatch) {
       // increment failed attempts
       const attempts = (user.failedLoginAttempts || 0) + 1;
       const updates: any = { failedLoginAttempts: attempts };
 
-      // DISABLED: OTP feature disabled for login attempts
-      // if (attempts >= 3) {
-      //   // generate OTP, save and send
-      //   const otp = generateOtp(6);
-      //   const expiry = new Date(Date.now() + 10 * 60 * 1000);
-      //   updates.otpCode = otp;
-      //   updates.otpExpiry = expiry;
-      //   await prisma.user.update({ where: { id: user.id }, data: updates });
-      //   // send OTP to user's email (fire-and-forget)
-      //   sendOtpEmail(user.email, otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP email', e));
-      //   return res.status(403).json({ success: false, error: 'Too many failed attempts. An OTP has been sent to your registered email.' });
-      // }
+      if (attempts >= 3) {
+        // generate OTP, save and send via notification service (or fallback to SMTP)
+        const otp = generateOtp(6);
+        const expiry = new Date(Date.now() + 10 * 60 * 1000);
+        updates.otpCode = otp;
+        updates.otpExpiry = expiry;
+        await prisma.user.update({ where: { id: user.id }, data: updates });
+        // send OTP to user's email (fire-and-forget)
+        sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP notification', e));
+        return res.status(403).json({ success: false, error: 'Too many failed attempts. An OTP has been sent to your registered email.' });
+      }
 
       await prisma.user.update({ where: { id: user.id }, data: updates });
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    const age = computeAge(user.dateOfBirth as any);
-    // reset failed attempts and clear otp
-    await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, otpCode: null, otpExpiry: null } });
-    const token = generateToken({ userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, age });
+    // At this point password is valid. For both temporary and permanent-password users
+    // we do not return token or user data yet. Instead generate a one-time code (OTP),
+    // persist it and send it via the notification service. The client will call
+    // POST /api/auth/login/otp to verify the code (and optionally set a permanent
+    // password for first-time users) which will issue the token and return user data.
 
-    res.json({ success: true, token, user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, dateOfBirth: user.dateOfBirth, numberOfChildren: user.numberOfChildren } });
+    const otp = generateOtp(6);
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+    await prisma.user.update({ where: { id: user.id }, data: { otpCode: otp, otpExpiry: expiry, failedLoginAttempts: 0 } });
+    console.log(`Login OTP for user ${user.email}: ${otp} (expires ${expiry.toISOString()})`);
+    sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP on login', e));
+
+    return res.json({ success: true, message: 'OTP sent to your email' });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
@@ -224,12 +279,12 @@ router.post('/login', async (req: Request, res: Response) => {
 // POST /api/auth/login/otp - login using OTP sent to email
 router.post('/login/otp', async (req: Request, res: Response) => {
   try {
-    const validation = otpLoginSchema.safeParse(req.body);
+    const validation = otpVerifySchema.safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({ success: false, error: validation.error.issues[0].message });
     }
 
-    const { identifier, otp } = validation.data;
+    const { identifier, otp, newPassword } = validation.data as { identifier: string; otp: string; newPassword?: string };
     const user = await prisma.user.findFirst({ where: [{ email: identifier }, { username: identifier }, { phone: identifier }] });
     if (!user || !user.otpCode) {
       return res.status(401).json({ success: false, error: 'Invalid OTP or credentials' });
@@ -243,7 +298,20 @@ router.post('/login/otp', async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Invalid OTP' });
     }
 
-    // OTP valid — clear and authenticate
+    // OTP valid — if user had a temporary password, prompt for permanent password
+    if (user.passwordIsTemporary) {
+      if (!newPassword) {
+        // Do not clear the OTP yet. Prompt client to supply a newPassword in a
+        // subsequent call to this endpoint along with the same OTP.
+        return res.status(200).json({ success: true, temporary: true, message: 'OTP valid. Please set a permanent password by providing `newPassword` in this endpoint.' });
+      }
+
+      // user provided a new permanent password — set it and clear temporary flag
+      const hashed = await hashPassword(newPassword);
+      await prisma.user.update({ where: { id: user.id }, data: { password: hashed, passwordIsTemporary: false } });
+    }
+
+    // Clear OTP and failed attempts, then issue token and return user data
     await prisma.user.update({ where: { id: user.id }, data: { otpCode: null, otpExpiry: null, failedLoginAttempts: 0 } });
     const age = computeAge(user.dateOfBirth as any);
     const token = generateToken({ userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, age });
@@ -251,6 +319,24 @@ router.post('/login/otp', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('OTP login error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/set-password - set a permanent password (requires auth)
+router.post('/set-password', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const body = req.body as any;
+    if (!body || !body.password || typeof body.password !== 'string' || body.password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    }
+
+    const userId = (req.user as any).userId;
+    const hashed = await hashPassword(body.password);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashed, passwordIsTemporary: false } });
+    return res.json({ success: true, message: 'Password set successfully' });
+  } catch (error) {
+    console.error('Set password error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

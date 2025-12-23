@@ -75,13 +75,17 @@ const options = {
             userId: {
               type: 'string',
             },
+            accountId: {
+              type: 'string',
+              format: 'uuid',
+            },
             amount: {
               type: 'number',
               format: 'double',
             },
             type: {
               type: 'string',
-              enum: ['registration', 'pension_contribution', 'payment'],
+              enum: ['registration', 'pension_contribution', 'payment', 'contribution', 'withdrawal_early', 'earnings_interest'],
             },
             status: {
               type: 'string',
@@ -89,6 +93,85 @@ const options = {
             },
             description: {
               type: 'string',
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
+        Account: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+            },
+            userId: {
+              type: 'string',
+              format: 'uuid',
+            },
+            accountNumber: {
+              type: 'string',
+            },
+            accountType: {
+              type: 'string',
+              enum: ['MANDATORY', 'VOLUNTARY', 'EMPLOYER', 'SAVINGS', 'WITHDRAWAL', 'BENEFITS'],
+            },
+            accountStatus: {
+              type: 'string',
+              enum: ['ACTIVE', 'SUSPENDED', 'CLOSED', 'FROZEN', 'DECEASED'],
+            },
+            currentBalance: {
+              type: 'number',
+              format: 'double',
+            },
+            availableBalance: {
+              type: 'number',
+              format: 'double',
+            },
+            lockedBalance: {
+              type: 'number',
+              format: 'double',
+            },
+            employeeContributions: {
+              type: 'number',
+              format: 'double',
+            },
+            employerContributions: {
+              type: 'number',
+              format: 'double',
+            },
+            voluntaryContributions: {
+              type: 'number',
+              format: 'double',
+            },
+            interestEarned: {
+              type: 'number',
+              format: 'double',
+            },
+            investmentReturns: {
+              type: 'number',
+              format: 'double',
+            },
+            dividendsEarned: {
+              type: 'number',
+              format: 'double',
+            },
+            totalWithdrawn: {
+              type: 'number',
+              format: 'double',
+            },
+            riskProfile: {
+              type: 'string',
+              enum: ['LOW', 'MEDIUM', 'HIGH'],
+            },
+            kycVerified: {
+              type: 'boolean',
+            },
+            complianceStatus: {
+              type: 'string',
+              enum: ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'],
             },
             createdAt: {
               type: 'string',
@@ -108,6 +191,10 @@ const options = {
         description: 'User registration, login, and token verification operations',
       },
       {
+        name: 'Accounts',
+        description: 'Pension account management - create, view, contribute, withdraw, and manage balances',
+      },
+      {
         name: 'Payments',
         description: 'Payment initiation, status checking, and M-Pesa callbacks',
       },
@@ -120,9 +207,10 @@ const options = {
   apis: [
     './src/routes/health.ts',
     './src/routes/auth/register.ts',
-      './src/routes/auth/promote.ts',
-      './src/routes/users.ts',
+    './src/routes/auth/promote.ts',
     './src/routes/auth/login.ts',
+    './src/routes/accounts.ts',
+    './src/routes/users.ts',
     './src/routes/payment/index.ts',
     './src/routes/payment/handlers/initiate.ts',
     './src/routes/payment/handlers/status.ts',

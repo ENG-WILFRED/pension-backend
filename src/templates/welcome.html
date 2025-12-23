@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Welcome to Pension App</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #111; }
+      .card { max-width: 680px; margin: 24px auto; padding: 24px; border: 1px solid #e6e6e6; border-radius: 6px; }
+      .cta { display: inline-block; margin-top: 12px; padding: 10px 16px; background: #0066cc; color: #fff; border-radius: 4px; text-decoration: none; }
+      .muted { color: #666; font-size: 13px; }
+      .password { font-family: monospace; background:#f6f6f6; padding:6px 8px; border-radius:4px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p>Hi {{ name }},</p>
+      <p>{{ message }}</p>
+      <p>Your temporary password is: <span class="password">{{ temp_password }}</span></p>
+      <p>Please set a permanent password by following the link below:</p>
+      <p><a class="cta" href="{{ link }}">Set my password</a></p>
+      <p class="muted">If you did not sign up for an account, please ignore this email.</p>
+    </div>
+  </body>
+</html>

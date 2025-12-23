@@ -5,6 +5,7 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './lib/swagger';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
+import accountRoutes from './routes/accounts';
 import paymentRoutes from './routes/payment';
 import dashboardRoutes from './routes/dashboard';
 import healthRoutes from './routes/health';
@@ -38,6 +39,7 @@ app.get('/swagger.json', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/accounts', accountRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api', healthRoutes);

@@ -17,11 +17,14 @@ export class User {
   @Column({ unique: true })
   email!: string;
 
-  @Column({ unique: true, nullable: true })
-  username?: string;
+  @Column({ unique: true })
+  username!: string;
 
-  @Column()
-  password!: string;
+  @Column({ nullable: true })
+  password?: string;
+
+  @Column({ type: 'boolean', default: false })
+  passwordIsTemporary!: boolean;
 
   @Column({ nullable: true })
   firstName?: string;

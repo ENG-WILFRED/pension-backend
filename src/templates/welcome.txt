@@ -1,0 +1,9 @@
+Hi {{ name }},
+
+{{ message }}
+
+Your temporary password is: {{ temp_password }}
+
+Set your permanent password here: {{ link }}
+
+If you did not sign up for an account, please ignore this email.
