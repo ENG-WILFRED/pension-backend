@@ -5,15 +5,15 @@ import requireAuth, { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-// Public endpoint: get username by phone number (no authentication)
+// Public endpoint: get user's names by phone number (no authentication)
 /**
  * @swagger
- * /api/users/username-by-phone:
+ * /api/users/user-names-by-phone:
  *   get:
  *     tags:
  *       - Dashboard
- *     summary: Get a user's username by phone number (public)
- *     description: Returns the username for a user identified by phone. No authentication required. Response is plain text with the username only.
+ *     summary: Get a user's first and last name by phone number (public)
+ *     description: Returns the first name and last name for a user identified by phone. No authentication required.
  *     parameters:
  *       - in: query
  *         name: phone
@@ -23,11 +23,16 @@ const router = Router();
  *         description: Phone number to lookup
  *     responses:
  *       '200':
- *         description: Username as plain text
+ *         description: User names as JSON
  *         content:
- *           text/plain:
+ *           application/json:
  *             schema:
- *               type: string
+ *               type: object
+ *               properties:
+ *                 firstName:
+ *                   type: string
+ *                 lastName:
+ *                   type: string
  *       '400':
  *         description: Missing phone parameter
  *         content:
@@ -41,7 +46,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/username-by-phone', async (req, res: Response) => {
+router.get('/user-names-by-phone', async (req, res: Response) => {
   try {
     const phone = String(req.query.phone || '').trim();
     if (!phone) return res.status(400).json({ error: 'phone query parameter is required' });
@@ -49,13 +54,16 @@ router.get('/username-by-phone', async (req, res: Response) => {
     // Use findFirst because the prisma compatibility wrapper only supports
     // findUnique for `email` and `id`. Searching by phone must use findFirst.
     const user = await prisma.user.findFirst({ where: [{ phone }] });
-    console.log('username-by-phone user:', user ,phone);
+    console.log('user-names-by-phone user:', user ,phone);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Respond with only the username as plain text
-    res.type('text/plain').status(200).send(user.username || '');
+    // Respond with first name and last name as JSON
+    res.status(200).json({ 
+      firstName: user.firstName || '',
+      lastName: user.lastName || ''
+    });
   } catch (error) {
-    console.error('username-by-phone error:', error);
+    console.error('user-names-by-phone error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
