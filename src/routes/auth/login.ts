@@ -250,7 +250,7 @@ router.post('/login', async (req: Request, res: Response) => {
         updates.otpExpiry = expiry;
         await prisma.user.update({ where: { id: user.id }, data: updates });
         // send OTP to user's email (fire-and-forget)
-        sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP notification', e));
+        sendOtpNotification(user.phone, 'otp', 'sms', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP notification', e));
         return res.status(403).json({ success: false, error: 'Too many failed attempts. An OTP has been sent to your registered email.' });
       }
 
@@ -268,7 +268,7 @@ router.post('/login', async (req: Request, res: Response) => {
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
     await prisma.user.update({ where: { id: user.id }, data: { otpCode: otp, otpExpiry: expiry, failedLoginAttempts: 0 } });
     console.log(`Login OTP for user ${user.email}: ${otp} (expires ${expiry.toISOString()})`);
-    sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP on login', e));
+    sendOtpNotification(user.phone, 'otp', 'sms', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP on login', e));
 
     return res.json({ success: true, message: 'OTP sent to your email' });
   } catch (error) {
