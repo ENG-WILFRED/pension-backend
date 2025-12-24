@@ -179,6 +179,27 @@ const options = {
             },
           },
         },
+        TermsAndConditions: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+            },
+            body: {
+              type: 'string',
+              description: 'HTML formatted terms and conditions content',
+            },
+            createdDate: {
+              type: 'string',
+              format: 'date-time',
+            },
+            updatedDate: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
       },
     },
     tags: [
@@ -202,6 +223,10 @@ const options = {
         name: 'Dashboard',
         description: 'User profile, transactions, and statistics',
       },
+      {
+        name: 'Terms and Conditions',
+        description: 'Retrieve and update terms and conditions documents',
+      },
     ],
   },
   apis: [
@@ -216,6 +241,7 @@ const options = {
     './src/routes/payment/handlers/status.ts',
     './src/routes/payment/handlers/callback.ts',
     './src/routes/dashboard.ts',
+    './src/routes/terms-and-conditions.ts',
   ],
 };
 
