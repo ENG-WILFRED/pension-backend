@@ -54,9 +54,12 @@ router.get('/', async (req, res: Response) => {
 
     // Get the latest (only) terms and conditions
     const termsRepository = dataSource.getRepository(TermsAndConditions);
-    const termsAndConditions = await termsRepository.findOne({
+    const termsAndConditionsList = await termsRepository.find({
       order: { updatedDate: 'DESC' },
+      take: 1,
     });
+
+    const termsAndConditions = termsAndConditionsList[0] || null;
 
     if (!termsAndConditions) {
       return res.status(404).json({ error: 'Terms and conditions not found' });
@@ -170,9 +173,11 @@ router.put('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
     // Get existing or create new terms and conditions
     const termsRepository = dataSource.getRepository(TermsAndConditions);
-    let termsAndConditions = await termsRepository.findOne({
+    const termsAndConditionsList = await termsRepository.find({
       order: { updatedDate: 'DESC' },
+      take: 1,
     });
+    let termsAndConditions = termsAndConditionsList[0] || null;
 
     if (termsAndConditions) {
       // Update existing
