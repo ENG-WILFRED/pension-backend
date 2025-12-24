@@ -482,7 +482,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
           const { sendOtpNotification } = await import('../../lib/notification');
           if (temporaryPasswordPlain) {
             // send as OTP-style notification
-            await sendOtpNotification(email, 'welcome', 'email', temporaryPasswordPlain, firstName, 60);
+            await sendOtpNotification(email, 'welcome', 'sms', temporaryPasswordPlain, firstName, 60);
           }
         } catch (e) {
           console.error('Failed sending temporary password notification', e);
