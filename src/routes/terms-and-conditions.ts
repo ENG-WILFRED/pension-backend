@@ -7,6 +7,12 @@ import { User } from '../entities/User';
 
 const router = Router();
 
+async function ensureInitialized() {
+  if (!dataSource.isInitialized) {
+    await dataSource.initialize();
+  }
+}
+
 /**
  * @swagger
  * /api/terms-and-conditions:
@@ -43,6 +49,9 @@ const router = Router();
  */
 router.get('/', async (req, res: Response) => {
   try {
+    // Ensure DataSource is initialized
+    await ensureInitialized();
+
     // Get the latest (only) terms and conditions
     const termsRepository = dataSource.getRepository(TermsAndConditions);
     const termsAndConditions = await termsRepository.findOne({
@@ -134,6 +143,9 @@ router.get('/', async (req, res: Response) => {
  */
 router.put('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    // Ensure DataSource is initialized
+    await ensureInitialized();
+
     // Validate request body
     const updateSchema = z.object({
       body: z.string().min(1, 'Body is required'),
