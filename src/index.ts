@@ -9,6 +9,7 @@ import accountRoutes from './routes/accounts';
 import paymentRoutes from './routes/payment';
 import dashboardRoutes from './routes/dashboard';
 import healthRoutes from './routes/health';
+import termsAndConditionsRoutes from './routes/terms-and-conditions';
 
 dotenv.config();
 
@@ -42,6 +43,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
 app.use('/api', healthRoutes);
 
 // Error handling middleware
