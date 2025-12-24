@@ -6,7 +6,6 @@ import { TermsAndConditions } from '../entities/TermsAndConditions';
 import { User } from '../entities/User';
 
 const router = Router();
-const termsRepository = dataSource.getRepository(TermsAndConditions);
 
 /**
  * @swagger
@@ -45,6 +44,7 @@ const termsRepository = dataSource.getRepository(TermsAndConditions);
 router.get('/', async (req, res: Response) => {
   try {
     // Get the latest (only) terms and conditions
+    const termsRepository = dataSource.getRepository(TermsAndConditions);
     const termsAndConditions = await termsRepository.findOne({
       order: { updatedDate: 'DESC' },
     });
@@ -157,6 +157,7 @@ router.put('/', requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     // Get existing or create new terms and conditions
+    const termsRepository = dataSource.getRepository(TermsAndConditions);
     let termsAndConditions = await termsRepository.findOne({
       order: { updatedDate: 'DESC' },
     });
