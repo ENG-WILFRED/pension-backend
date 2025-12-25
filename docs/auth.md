@@ -1,63 +1,374 @@
-# Authentication Flow (Auth.md)
+# Authentication Documentation
 
-This document explains the authentication flow and how external clients should integrate with the API.
+This document provides complete details about authentication endpoints, required data, and expected responses.
 
 ## Overview
-- Password-based login uses an additional OTP verification step for security.
-- New users receive a temporary password during registration (sent via the Notification Service). They must exchange that temporary password for a permanent password during first login.
-- The server never returns a token or user data at the initial password check; tokens are issued only after OTP verification.
+- Users register and make a payment (1 KES) to activate their account
+- Temporary passwords are auto-generated and sent via email and SMS
+- Login uses a two-step process: password verification + OTP verification
+- Temporary passwords must be exchanged for permanent passwords on first login
 
-## Endpoints
+---
+
+## 1. REGISTRATION FLOW
+
+### Endpoint: POST /api/auth/register
+
+**Purpose:** Initiate registration and M-Pesa payment
+
+**Required Fields:**
+- `email` (string, email format) - User's email address
+- `username` (string, min 1 char) - Unique username for login
+- `phone` (string) - Phone number for M-Pesa payment
+
+**Optional Fields:**
+- `firstName` (string) - User's first name
+- `lastName` (string) - User's last name
+- `dateOfBirth` (string, ISO date) - User's date of birth
+- `gender` (string) - Gender (M/F/Other)
+- `maritalStatus` (string) - Marital status
+- `spouseName` (string) - Spouse's name (if married)
+- `spouseDob` (string, ISO date) - Spouse's date of birth
+- `children` (array) - Array of child objects with `name` and `dob`
+- `nationalId` (string) - National ID number
+- `address` (string) - Physical address
+- `city` (string) - City
+- `country` (string) - Country
+- `occupation` (string) - Job occupation
+- `employer` (string) - Employer name
+- `salary` (number) - Salary amount
+- `contributionRate` (number) - Pension contribution rate
+- `retirementAge` (number) - Desired retirement age
+
+**Request Example:**
+```json
+{
+  "email": "john@example.com",
+  "username": "john_doe",
+  "phone": "+254712345678",
+  "firstName": "John",
+  "lastName": "Doe",
+  "dateOfBirth": "1990-05-15",
+  "gender": "M",
+  "maritalStatus": "Single"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "status": "payment_initiated",
+  "message": "Payment initiated. Please check your phone for the M-Pesa prompt.",
+  "transactionId": "550e8400-e29b-41d4-a716-446655440000",
+  "checkoutRequestId": "ws_1234567890",
+  "statusCheckUrl": "/api/auth/register/status/550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "success": false,
+  "error": "Email already registered"
+}
+```
+
+**Error Response (500):**
+```json
+{
+  "success": false,
+  "error": "Failed to initiate payment. Please try again."
+}
+```
+
+---
+
+### Endpoint: GET /api/auth/register/status/{transactionId}
+
+**Purpose:** Poll to check payment status and complete registration
+
+**Path Parameters:**
+- `transactionId` (string) - Transaction ID from registration initiation
+
+**Response - Payment Still Pending (200):**
+```json
+{
+  "success": true,
+  "status": "payment_pending",
+  "message": "Waiting for payment confirmation...",
+  "transactionId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Response - Payment Completed & User Created (200):**
+```json
+{
+  "success": true,
+  "status": "registration_completed",
+  "message": "Registration completed successfully",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "user-uuid",
+    "email": "john@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "dateOfBirth": "1990-05-15",
+    "numberOfChildren": 0
+  }
+}
+```
+
+**Response - Payment Failed (200):**
+```json
+{
+  "success": false,
+  "status": "payment_failed",
+  "error": "Payment failed. Please try again.",
+  "transactionId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Error Response - Transaction Not Found (404):**
+```json
+{
+  "success": false,
+  "error": "Transaction not found"
+}
+```
+
+**What Happens After Successful Registration:**
+- Temporary password is automatically generated
+- Email is sent with temporary password and username
+- SMS is sent with temporary password
+- User can login with username/email/phone + temporary password
+- On first login, user must set a permanent password
+
+---
+
+## 2. LOGIN FLOW
+
+### Step 1: Endpoint: POST /api/auth/login
+
+**Purpose:** Verify password and send OTP
+
+**Required Fields:**
+- `identifier` (string) - User's email, username, or phone number
+- `password` (string) - User's password (temporary or permanent)
+
+**Request Example:**
+```json
+{
+  "identifier": "john_doe",
+  "password": "abc12345"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "OTP sent to your email"
+}
+```
+
+**Error - Invalid Credentials (401):**
+```json
+{
+  "success": false,
+  "error": "Invalid email or password"
+}
+```
+
+**Error - Account Locked (403):**
+```json
+{
+  "success": false,
+  "error": "Account locked due to too many failed login attempts. Please try again later."
+}
+```
+
+**Error - Validation Error (400):**
+```json
+{
+  "success": false,
+  "error": "Invalid request body"
+}
+```
+
+---
+
+### Step 2: Endpoint: POST /api/auth/login/otp
+
+**Purpose:** Verify OTP and complete login (set permanent password if needed)
+
+**Required Fields:**
+- `identifier` (string) - User's email, username, or phone
+- `otp` (string) - 6-digit OTP from email
+
+**Optional Fields:**
+- `newPassword` (string) - **REQUIRED** for first-time login with temporary password. Must be at least 6 characters.
+
+**Request Example - Regular Login:**
+```json
+{
+  "identifier": "john_doe",
+  "otp": "123456"
+}
+```
+
+**Request Example - First-Time Login (Setting Permanent Password):**
+```json
+{
+  "identifier": "john_doe",
+  "otp": "123456",
+  "newPassword": "myPermanentPassword123"
+}
+```
+
+**Success Response - First-Time User (Needs Password) (200):**
+```json
+{
+  "success": true,
+  "temporary": true,
+  "message": "Please set your permanent password",
+  "identifier": "john_doe"
+}
+```
+
+**Success Response - Login Complete (200):**
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "user-uuid",
+    "email": "john@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+254712345678",
+    "role": "customer"
+  }
+}
+```
+
+**Error - Invalid OTP (401):**
+```json
+{
+  "success": false,
+  "error": "Invalid OTP"
+}
+```
+
+**Error - OTP Expired (401):**
+```json
+{
+  "success": false,
+  "error": "OTP has expired"
+}
+```
+
+**Error - Invalid Password (400):**
+```json
+{
+  "success": false,
+  "error": "Password must be at least 6 characters"
+}
+```
+
+**Error - Too Many Failed Attempts (403):**
+```json
+{
+  "success": false,
+  "error": "Too many OTP verification attempts. Please try login again."
+}
+```
+
+---
+
+## 3. COMPLETE REGISTRATION FLOW DIAGRAM
+
+```
+User Registration:
 1. POST /api/auth/register
-   - Creates a registration transaction and (after payment) the user with a temporary password.
-   - Notification: A temporary password is sent to the user's email via the Notification Service.
-
-2. POST /api/auth/login
-   - Body: `{ "identifier": "user@example.com | username | phone", "password": "..." }`
-   - Server verifies the password.
-   - If password is correct (temporary or permanent), server generates a one-time code (OTP), saves it on the user with an expiry, and sends it via the Notification Service to the user's email.
-   - Response: `200 OK` with `{ "success": true, "message": "OTP sent to your email" }`.
-   - No token or user data is returned at this stage.
-
-3. POST /api/auth/login/otp
-   - Body: `{ "identifier": "...", "otp": "123456", "newPassword": "optional-for-first-time" }`
-   - Server validates the OTP.
-   - If the user had a temporary password, `newPassword` is required (>=6 chars). The server will hash and set the permanent password and clear the temporary flag.
-   - On success the server issues the JWT token and returns user data: `{ success: true, token, user: {...} }`.
-
-4. POST /api/auth/set-password (optional)
-   - Authenticated endpoint to set/change your password after you've obtained a token.
-   - Body: `{ "password": "newpass" }`
-
-## Integration Notes
-- Clients should follow a two-step login flow:
-  1. Call `POST /api/auth/login` with identifier + password. If response indicates OTP sent, prompt the user to check their email.
-  2. Call `POST /api/auth/login/otp` with identifier + otp (and `newPassword` if this is the first-time login using a temporary password).
-  3. On success store the returned token and user data for authenticated requests.
-
-- Keep the OTP UI separate from the password UI. If the user is using a temporary password, your UI should ask for a new permanent password on the OTP screen.
-
-- Use idempotency and retry when calling the Notification Service. The service returns quickly (202/acknowledged behavior) and delivers asynchronously.
-
-- Secure flows:
-  - Protect the `POST /api/auth/login/otp` endpoint against brute-force OTP attempts by rate-limiting and tracking failed attempts (already tracked via `failedLoginAttempts`).
-  - Ensure the Notification Service is configured correctly in `NOTIFY_URL` and that emails are delivered.
-
-## Example (client)
-1) Start login
-```js
-await axios.post('/api/auth/login', { identifier: 'alice@example.com', password: 'temporary123' });
-// => { success: true, message: 'OTP sent to your email' }
-```
-2) Complete login (first-time user)
-```js
-await axios.post('/api/auth/login/otp', { identifier: 'alice@example.com', otp: '123456', newPassword: 'permanentPass123' });
-// => { success: true, token: '...', user: {...} }
+   ↓
+2. M-Pesa STK Push on phone
+   ↓
+3. User enters M-Pesa PIN
+   ↓
+4. GET /api/auth/register/status/{transactionId} (poll)
+   ↓
+5. Payment confirmed
+   ↓
+6. User account created with temporary password
+   ↓
+7. Email + SMS sent with temporary password
 ```
 
-## Notes
-- The server stores OTP codes temporarily; they expire after 10 minutes.
-- Temporary passwords are single-use: once exchanged for a permanent password during OTP verification, the temporary flag is cleared.
+---
 
-***
-Generated: 2025-12-22
+## 4. COMPLETE LOGIN FLOW DIAGRAM
+
+```
+User Login:
+1. POST /api/auth/login (email/username/phone + password)
+   ↓
+2. Password verified
+   ↓
+3. OTP generated and sent to email
+   ↓
+4. Response: "OTP sent to your email"
+   ↓
+5. POST /api/auth/login/otp (identifier + OTP + optional newPassword)
+   ↓
+6. If first-time (temp password):
+   - Response: "Please set permanent password"
+   - Call again with same OTP + newPassword
+   ↓
+7. OTP verified, permanent password set (if first-time)
+   ↓
+8. JWT token issued + user data returned
+```
+
+---
+
+## 5. AUTHENTICATION HEADER
+
+All authenticated endpoints require:
+```
+Authorization: Bearer <JWT_TOKEN>
+```
+
+Example:
+```
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  https://api.example.com/api/dashboard/profile
+```
+
+---
+
+## 6. KEY SECURITY NOTES
+
+- OTP codes expire after 10 minutes
+- Failed login attempts are tracked (max 5, then account locks)
+- Account lockout expires after 15 minutes
+- Temporary passwords are single-use
+- All passwords are hashed with bcryptjs
+- JWT tokens include user ID, email, and role
+
+---
+
+## 7. NOTIFICATIONS SENT
+
+**During Registration (after payment):**
+- **Email:** Contains temporary password, username, and login instructions
+- **SMS:** Contains temporary password only
+
+**During Login:**
+- **Email:** Contains 6-digit OTP code
+
+---
+
+Generated: 2025-12-24
+Updated: 2025-12-24

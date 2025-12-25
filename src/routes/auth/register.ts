@@ -12,7 +12,7 @@ import axios from 'axios';
  *     tags:
  *       - Authentication
  *     summary: Register a new user with M-Pesa payment initiation
- *     description: Creates a pending registration transaction and initiates M-Pesa payment for registration fee (1 KES)
+ *     description: Creates a pending registration transaction and initiates M-Pesa payment for registration fee (1 KES). A temporary password will be sent to the user via email and SMS after registration is completed.
  *     requestBody:
  *       required: true
  *       content:
@@ -21,17 +21,17 @@ import axios from 'axios';
  *             type: object
  *             required:
  *               - email
- *               - password
+ *               - username
  *               - phone
  *             properties:
  *               email:
  *                 type: string
  *                 format: email
  *                 example: user@example.com
- *               password:
+ *               username:
  *                 type: string
- *                 minLength: 6
- *                 example: password123
+ *                 minLength: 1
+ *                 example: john_doe
  *               phone:
  *                 type: string
  *                 example: '+254712345678'
@@ -476,18 +476,40 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
       }
 
       // Link transaction to user
-
-        // send temporary password to user via notification service (best-effort)
-        try {
-          const { sendOtpNotification } = await import('../../lib/notification');
-          if (temporaryPasswordPlain) {
-            // send as OTP-style notification
-            await sendOtpNotification(email, 'welcome', 'sms', temporaryPasswordPlain, firstName, 60);
-          }
-        } catch (e) {
-          console.error('Failed sending temporary password notification', e);
-        }
       await prisma.transaction.update({ where: { id: transactionId }, data: { userId: user.id } });
+
+      // Send temporary password to user via both email and SMS
+      try {
+        const { sendOtpNotification, notify } = await import('../../lib/notification');
+        if (temporaryPasswordPlain) {
+          // Send SMS with temporary password
+          try {
+            await sendOtpNotification(phone, 'welcome', 'sms', temporaryPasswordPlain, firstName, 60);
+            console.log('[Register] Sent SMS with temporary password to', phone);
+          } catch (smsError) {
+            console.error('[Register] Failed sending SMS notification:', smsError);
+          }
+
+          // Send Email with temporary password
+          try {
+            await notify({
+              to: email,
+              channel: 'email',
+              template: 'welcome',
+              data: {
+                name: firstName || 'User',
+                temporaryPassword: temporaryPasswordPlain,
+                username,
+              },
+            });
+            console.log('[Register] Sent email with temporary password to', email);
+          } catch (emailError) {
+            console.error('[Register] Failed sending email notification:', emailError);
+          }
+        }
+      } catch (e) {
+        console.error('[Register] Failed sending notifications:', e);
+      }
 
       // Generate token
       const { generateToken } = await import('../../lib/auth');
