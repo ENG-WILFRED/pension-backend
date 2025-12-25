@@ -305,6 +305,8 @@ router.post('/register', async (req: Request, res: Response) => {
     if (existingByEmail) return res.status(400).json({ success: false, error: 'Email already registered' });
     const existingByUsername = (await prisma.user.findMany({ where: { username } }))?.[0];
     if (existingByUsername) return res.status(400).json({ success: false, error: 'Username already taken' });
+    const existingByPhone = (await prisma.user.findMany({ where: { phone } }))?.[0];
+    if (existingByPhone) return res.status(400).json({ success: false, error: 'Phone number already registered' });
 
     // Initiate M-Pesa STK Push payment
     try {
@@ -403,7 +405,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
     }
 
     // If payment completed, automatically complete registration
-      if (transaction.status === 'completed' && transaction.type === 'registration') {
+    if (transaction.status === 'completed' && transaction.type === 'registration') {
       const metadata = (transaction.metadata ?? {}) as any;
       const {
         email,
@@ -443,7 +445,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
 
       // Create user if doesn't exist
       let user = await prisma.user.findUnique({ where: { email } });
-        if (!user) {
+      if (!user) {
         user = await prisma.user.create({
           data: {
             email,
@@ -480,11 +482,30 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
 
       // Send temporary password to user via both email and SMS
       try {
-        const { sendOtpNotification, notify } = await import('../../lib/notification');
+        const { notify } = await import('../../lib/notification');
         if (temporaryPasswordPlain) {
           // Send SMS with temporary password
           try {
-            await sendOtpNotification(phone, 'welcome', 'sms', temporaryPasswordPlain, firstName, 60);
+            await notify({
+              to: email,
+              channel: 'email',
+              template: 'welcome',
+              data: {
+                name: firstName || 'User',
+                temp_password: temporaryPasswordPlain,
+                link: "https://transactions-k6gk.onrender.com/login"
+              },
+            });
+            await notify({
+              to: phone,
+              channel: 'sms',
+              template: 'welcome',
+              data: {
+                name: firstName || 'User',
+                temp_password: temporaryPasswordPlain,
+                link: "https://transactions-k6gk.onrender.com/login"
+              },
+            });
             console.log('[Register] Sent SMS with temporary password to', phone);
           } catch (smsError) {
             console.error('[Register] Failed sending SMS notification:', smsError);
