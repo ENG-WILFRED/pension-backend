@@ -14,9 +14,9 @@ export class Transaction {
   @ManyToOne(() => User, (user: { transactions: any; }) => user.transactions, { onDelete: 'CASCADE' })
   user?: User;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'int', nullable: true })
   @Index()
-  accountId?: string;
+  accountId?: number;
 
   @ManyToOne(() => Account, (account) => account.transactions, { onDelete: 'CASCADE' })
   account?: Account;

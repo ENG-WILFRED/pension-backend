@@ -4,6 +4,8 @@ import prisma from '../../lib/prisma';
 import { randomUUID } from 'crypto';
 import { hashPassword } from '../../lib/auth';
 import axios from 'axios';
+import AppDataSource from '../../lib/data-source';
+import { Account } from '../../entities/Account';
 
 /**
  * @swagger
@@ -74,6 +76,36 @@ import axios from 'axios';
  *                 type: number
  *               retirementAge:
  *                 type: number
+ *               accountType:
+ *                 type: string
+ *                 enum: [MANDATORY, VOLUNTARY, EMPLOYER, SAVINGS, WITHDRAWAL, BENEFITS]
+ *                 default: MANDATORY
+ *                 example: MANDATORY
+ *               riskProfile:
+ *                 type: string
+ *                 enum: [LOW, MEDIUM, HIGH]
+ *                 default: MEDIUM
+ *                 example: MEDIUM
+ *               currency:
+ *                 type: string
+ *                 default: KES
+ *                 example: KES
+ *                 minLength: 3
+ *                 maxLength: 3
+ *               accountStatus:
+ *                 type: string
+ *                 enum: [ACTIVE, SUSPENDED, CLOSED, FROZEN, DECEASED]
+ *                 default: ACTIVE
+ *                 example: ACTIVE
+ *               kycVerified:
+ *                 type: boolean
+ *                 default: false
+ *                 example: false
+ *               complianceStatus:
+ *                 type: string
+ *                 enum: [PENDING, APPROVED, REJECTED, SUSPENDED]
+ *                 default: PENDING
+ *                 example: PENDING
  *     responses:
  *       '200':
  *         description: Payment initiated successfully
@@ -129,7 +161,7 @@ import axios from 'axios';
  *     tags:
  *       - Authentication
  *     summary: Check registration payment status
- *     description: Poll this endpoint to check if payment was completed. On successful payment, automatically completes registration and returns JWT token
+ *     description: Poll this endpoint to check if payment was completed. On successful payment, automatically completes registration, creates a default pension account (MANDATORY type), and returns JWT token + account details
  *     parameters:
  *       - name: transactionId
  *         in: path
@@ -184,6 +216,24 @@ import axios from 'axios';
  *                           type: string
  *                         numberOfChildren:
  *                           type: number
+ *                     account:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                           format: uuid
+ *                           description: Auto-created default pension account ID
+ *                         accountNumber:
+ *                           type: string
+ *                         accountType:
+ *                           type: string
+ *                           example: MANDATORY
+ *                         accountStatus:
+ *                           type: string
+ *                           example: ACTIVE
+ *                         riskProfile:
+ *                           type: string
+ *                           example: MEDIUM
  *                 - type: object
  *                   properties:
  *                     success:
@@ -249,6 +299,12 @@ const registerSchema = z.object({
   salary: z.number().optional(),
   contributionRate: z.number().optional(),
   retirementAge: z.number().optional(),
+  accountType: z.enum(['MANDATORY', 'VOLUNTARY', 'EMPLOYER', 'SAVINGS', 'WITHDRAWAL', 'BENEFITS']).optional().default('MANDATORY'),
+  riskProfile: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional().default('MEDIUM'),
+  currency: z.string().length(3).optional().default('KES'),
+  accountStatus: z.enum(['ACTIVE', 'SUSPENDED', 'CLOSED', 'FROZEN', 'DECEASED']).optional().default('ACTIVE'),
+  kycVerified: z.boolean().optional().default(false),
+  complianceStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']).optional().default('PENDING'),
 });
 
 function computeAge(dob?: string | null): number | undefined {
@@ -291,6 +347,12 @@ router.post('/register', async (req: Request, res: Response) => {
       salary,
       contributionRate,
       retirementAge,
+      accountType,
+      riskProfile,
+      currency,
+      accountStatus,
+      kycVerified,
+      complianceStatus,
     } = validation.data;
 
     // Check if user already exists by email or phone
@@ -350,6 +412,12 @@ router.post('/register', async (req: Request, res: Response) => {
               salary,
               contributionRate,
               retirementAge,
+              accountType,
+              riskProfile,
+              currency,
+              accountStatus,
+              kycVerified,
+              complianceStatus,
             },
           },
         });
@@ -420,6 +488,12 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
         salary,
         contributionRate,
         retirementAge,
+        accountType,
+        riskProfile,
+        currency,
+        accountStatus,
+        kycVerified,
+        complianceStatus,
       } = metadata;
 
       if (!email || !hashedTemporaryPassword) {
@@ -468,6 +542,36 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
 
       // Link transaction to user
       await prisma.transaction.update({ where: { id: transactionId }, data: { userId: user.id } });
+
+      // Auto-create default pension account for new user
+      let createdAccount: any = null;
+      try {
+        const accountRepo = AppDataSource.getRepository(Account);
+        // Create account without accountNumber so we can obtain numeric id
+        const account = accountRepo.create({
+          userId: user.id,
+          accountType,
+          accountStatus,
+          riskProfile,
+          currency,
+          openedAt: new Date(),
+          currentBalance: 0,
+          availableBalance: 0,
+          lockedBalance: 0,
+          kycVerified,
+          complianceStatus,
+        });
+        // Save to obtain numeric auto-increment id
+        createdAccount = await accountRepo.save(account);
+        // Set accountNumber as zero-padded 8-digit string from id
+        const padded = String(createdAccount.id).padStart(8, '0');
+        createdAccount.accountNumber = padded;
+        await accountRepo.save(createdAccount);
+        console.log('[Register] Auto-created default pension account for user', user.id);
+      } catch (accountError) {
+        console.error('[Register] Failed to auto-create account:', accountError);
+        // Don't fail registration if account creation fails
+      }
 
       // Send temporary password to user via both email and SMS
       try {
@@ -544,6 +648,15 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
           dateOfBirth: user.dateOfBirth,
           numberOfChildren: user.numberOfChildren,
         },
+        ...(createdAccount && {
+          account: {
+            id: createdAccount.id,
+            accountNumber: createdAccount.accountNumber,
+            accountType: createdAccount.accountType,
+            accountStatus: createdAccount.accountStatus,
+            riskProfile: createdAccount.riskProfile,
+          },
+        }),
       });
     }
 

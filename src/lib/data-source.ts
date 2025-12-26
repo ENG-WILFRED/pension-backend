@@ -4,6 +4,7 @@ import { User } from '../entities/User';
 import { Transaction } from '../entities/Transaction';
 import { Account } from '../entities/Account';
 import { TermsAndConditions } from '../entities/TermsAndConditions';
+import { AccountType } from '../entities/AccountType';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -21,7 +22,7 @@ export default new DataSource({
   url: DATABASE_URL,
   synchronize: false,
   logging: false,
-  entities: [User, Transaction, Account, TermsAndConditions],
+  entities: [User, Transaction, Account, TermsAndConditions, AccountType],
   migrations: ['dist/migrations/*.js'],
   subscribers: [],
   ssl: enableSsl ? { rejectUnauthorized: false } : false,

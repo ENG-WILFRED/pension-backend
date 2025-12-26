@@ -5,6 +5,7 @@ This document provides complete details about authentication endpoints, required
 ## Overview
 - Users register and make a payment (1 KES) to activate their account
 - Temporary passwords are auto-generated and sent via email and SMS
+- A default pension account (MANDATORY type) is automatically created upon registration completion
 - Login uses a two-step process: password verification + OTP verification
 - Temporary passwords must be exchanged for permanent passwords on first login
 
@@ -38,18 +39,29 @@ This document provides complete details about authentication endpoints, required
 - `salary` (number) - Salary amount
 - `contributionRate` (number) - Pension contribution rate
 - `retirementAge` (number) - Desired retirement age
+- `accountType` (string, enum) - Account type: MANDATORY, VOLUNTARY, EMPLOYER, SAVINGS, WITHDRAWAL, BENEFITS (default: MANDATORY)
+- `riskProfile` (string, enum) - Risk profile: LOW, MEDIUM, HIGH (default: MEDIUM)
+- `currency` (string) - 3-letter currency code (default: KES)
+- `accountStatus` (string, enum) - Account status: ACTIVE, SUSPENDED, CLOSED, FROZEN, DECEASED (default: ACTIVE)
+- `kycVerified` (boolean) - KYC verification status (default: false)
+- `complianceStatus` (string, enum) - Compliance status: PENDING, APPROVED, REJECTED, SUSPENDED (default: PENDING)
 
 **Request Example:**
 ```json
 {
   "email": "john@example.com",
-  
   "phone": "+254712345678",
   "firstName": "John",
   "lastName": "Doe",
   "dateOfBirth": "1990-05-15",
   "gender": "M",
-  "maritalStatus": "Single"
+  "maritalStatus": "Single",
+  "accountType": "MANDATORY",
+  "riskProfile": "MEDIUM",
+  "currency": "KES",
+  "accountStatus": "ACTIVE",
+  "kycVerified": false,
+  "complianceStatus": "PENDING"
 }
 ```
 
@@ -140,8 +152,15 @@ This document provides complete details about authentication endpoints, required
 - Temporary password is automatically generated
 - Email is sent with temporary password
 - SMS is sent with temporary password
+- **A pension account is automatically created with the user-provided configuration** (accountType, riskProfile, currency, accountStatus, kycVerified, complianceStatus)
+- **Default values are used for any account fields not provided** (accountType: MANDATORY, riskProfile: MEDIUM, currency: KES, accountStatus: ACTIVE, kycVerified: false, complianceStatus: PENDING)
+- **Account number is auto-generated in format: `00YYRRRRRRRR`** (e.g., `0025ABCD1234`)
+  - `00`: Fixed prefix
+  - `YY`: Last 2 digits of year registered (e.g., 25 for 2025)
+  - `RRRRRRRR`: 8 random digits (0-9)
 - User can login with email/phone + temporary password
 - On first login, user must set a permanent password
+- The auto-created account is ready for contributions and transactions
 
 ---
 

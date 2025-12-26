@@ -14,15 +14,15 @@ import { Transaction } from './Transaction';
 @Entity({ name: 'accounts' })
 export class Account {
   // ========== Core Identification Fields ==========
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
+  @PrimaryGeneratedColumn()
+  id!: number;
 
   @Column({ type: 'uuid' })
   @Index()
   userId!: string;
 
-  @Column({ unique: true })
-  accountNumber!: string;
+  @Column({ unique: true, nullable: true })
+  accountNumber?: string;
 
   @ManyToOne(() => User, (user) => user.accounts, { onDelete: 'CASCADE' })
   user!: User;

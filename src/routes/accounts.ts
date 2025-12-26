@@ -2,18 +2,22 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import AppDataSource from '../lib/data-source';
 import { Account } from '../entities/Account';
+import { AccountType } from '../entities/AccountType';
 import { User } from '../entities/User';
 import { Transaction } from '../entities/Transaction';
 import requireAuth, { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const accountRepo = AppDataSource.getRepository(Account);
+const accountTypeRepo = AppDataSource.getRepository(AccountType);
 const userRepo = AppDataSource.getRepository(User);
 const transactionRepo = AppDataSource.getRepository(Transaction);
 
-// Validation schemas
+// Validation schemas for account creation
 const createAccountSchema = z.object({
-  accountType: z.enum(['MANDATORY', 'VOLUNTARY', 'EMPLOYER', 'SAVINGS', 'WITHDRAWAL', 'BENEFITS']).default('MANDATORY'),
+  // Either supply `accountTypeId` (admin-created) or a legacy enum `accountType`.
+  accountTypeId: z.string().uuid().optional(),
+  accountType: z.enum(['MANDATORY', 'VOLUNTARY', 'EMPLOYER', 'SAVINGS', 'WITHDRAWAL', 'BENEFITS']).optional().default('MANDATORY'),
   riskProfile: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
   interestRate: z.number().optional(),
   investmentPlanId: z.string().uuid().optional(),
@@ -39,91 +43,6 @@ const updateBalanceSchema = z.object({
   description: z.string().optional(),
 });
 
-/**
- * @swagger
- * /api/accounts:
- *   post:
- *     tags:
- *       - Accounts
- *     summary: Create a new pension account
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               accountType:
- *                 type: string
- *                 enum: [MANDATORY, VOLUNTARY, EMPLOYER, SAVINGS, WITHDRAWAL, BENEFITS]
- *                 default: MANDATORY
- *               riskProfile:
- *                 type: string
- *                 enum: [LOW, MEDIUM, HIGH]
- *                 default: MEDIUM
- *               interestRate:
- *                 type: number
- *               investmentPlanId:
- *                 type: string
- *                 format: uuid
- *               currency:
- *                 type: string
- *                 minLength: 3
- *                 maxLength: 3
- *                 default: KES
- *               beneficiaryDetails:
- *                 type: object
- *     responses:
- *       '201':
- *         description: Account created successfully
- *       '400':
- *         description: Invalid input
- *       '401':
- *         description: Unauthorized
- *       '500':
- *         description: Server error
- */
-router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = (req.user as any).userId;
-    const user = await userRepo.findOne({ where: { id: userId } });
-    if (!user) return res.status(401).json({ success: false, error: 'User not found' });
-
-    const data = createAccountSchema.parse(req.body);
-
-    // Generate unique account number
-    const accountNumber = `ACC-${userId.slice(0, 8).toUpperCase()}-${Date.now()}`;
-
-    const account = accountRepo.create({
-      userId,
-      accountNumber,
-      accountType: data.accountType,
-      accountStatus: 'ACTIVE',
-      riskProfile: data.riskProfile,
-      interestRate: data.interestRate,
-      investmentPlanId: data.investmentPlanId,
-      currency: data.currency,
-      beneficiaryDetails: data.beneficiaryDetails,
-      openedAt: new Date(),
-      currentBalance: 0,
-      availableBalance: 0,
-      lockedBalance: 0,
-      kycVerified: false,
-      complianceStatus: 'PENDING',
-    });
-
-    const savedAccount = await accountRepo.save(account);
-    return res.status(201).json({ success: true, account: savedAccount });
-  } catch (error: any) {
-    console.error('Create account error:', error);
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ success: false, error: error.errors });
-    }
-    return res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
 
 /**
  * @swagger
@@ -185,7 +104,8 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
  */
 router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid account id' });
     const userId = (req.user as any).userId;
 
     const account = await accountRepo.findOne({
@@ -246,7 +166,8 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
  */
 router.post('/:id/contribution', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid account id' });
     const userId = (req.user as any).userId;
 
     const data = contributionSchema.parse(req.body);
@@ -344,7 +265,8 @@ router.post('/:id/contribution', requireAuth, async (req: AuthRequest, res: Resp
  */
 router.post('/:id/earnings', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid account id' });
     const userId = (req.user as any).userId;
 
     const data = updateBalanceSchema.parse(req.body);
@@ -438,7 +360,8 @@ router.post('/:id/earnings', requireAuth, async (req: AuthRequest, res: Response
  */
 router.post('/:id/withdraw', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid account id' });
     const userId = (req.user as any).userId;
 
     const data = withdrawalSchema.parse(req.body);
@@ -534,7 +457,8 @@ router.post('/:id/withdraw', requireAuth, async (req: AuthRequest, res: Response
  */
 router.put('/:id/status', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid account id' });
     const userId = (req.user as any).userId;
     const { accountStatus } = req.body;
 
@@ -586,7 +510,8 @@ router.put('/:id/status', requireAuth, async (req: AuthRequest, res: Response) =
  */
 router.get('/:id/summary', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid account id' });
     const userId = (req.user as any).userId;
 
     const account = await accountRepo.findOne({

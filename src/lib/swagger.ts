@@ -200,6 +200,44 @@ const options = {
             },
           },
         },
+        AccountType: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              format: 'uuid',
+            },
+            name: {
+              type: 'string',
+              description: 'Unique name for the account type',
+              example: 'MANDATORY',
+            },
+            description: {
+              type: 'string',
+              description: 'Human-friendly description of account type',
+              example: 'Default mandatory pension account',
+            },
+            interestRate: {
+              type: 'number',
+              format: 'decimal',
+              description: 'Default interest rate as percentage',
+              example: 3.5,
+            },
+            active: {
+              type: 'boolean',
+              default: true,
+              description: 'Whether this account type is active',
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+            },
+          },
+        },
       },
     },
     tags: [
@@ -235,6 +273,7 @@ const options = {
     './src/routes/auth/promote.ts',
     './src/routes/auth/login.ts',
     './src/routes/accounts.ts',
+    './src/routes/account-types.ts',
     './src/routes/users.ts',
     './src/routes/payment/index.ts',
     './src/routes/payment/handlers/initiate.ts',
