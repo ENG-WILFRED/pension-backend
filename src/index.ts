@@ -3,14 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './lib/swagger';
-import authRoutes from './routes/auth';
-import userRoutes from './routes/users';
-import accountRoutes from './routes/accounts';
-import accountTypeRoutes from './routes/account-types';
-import paymentRoutes from './routes/payment';
-import dashboardRoutes from './routes/dashboard';
-import healthRoutes from './routes/health';
-import termsAndConditionsRoutes from './routes/terms-and-conditions';
+import AppDataSource from './lib/data-source';
+// Routes will be dynamically imported after the DataSource initializes to ensure
+// entity metadata is registered before repositories are accessed.
 
 dotenv.config();
 
@@ -38,15 +33,37 @@ app.get('/swagger.json', (req, res) => {
   res.send(swaggerSpec);
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/account-types', accountTypeRoutes);
-app.use('/api/payment', paymentRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
-app.use('/api', healthRoutes);
+// Initialize DB and then mount routes
+AppDataSource.initialize().then(async () => {
+  console.log('Database initialized');
+
+  const authRoutes = (await import('./routes/auth')).default;
+  const userRoutes = (await import('./routes/users')).default;
+  const accountRoutes = (await import('./routes/accounts')).default;
+  const accountTypeRoutes = (await import('./routes/account-types')).default;
+  const paymentRoutes = (await import('./routes/payment')).default;
+  const dashboardRoutes = (await import('./routes/dashboard')).default;
+  const healthRoutes = (await import('./routes/health')).default;
+  const termsAndConditionsRoutes = (await import('./routes/terms-and-conditions')).default;
+
+  app.use('/api/auth', authRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/accounts', accountRoutes);
+  app.use('/api/account-types', accountTypeRoutes);
+  app.use('/api/payment', paymentRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
+  app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
+  app.use('/api', healthRoutes);
+
+  // Start server after DB initialized and routes mounted
+  app.listen(PORT, () => {
+    console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+    console.log(`📡 CORS enabled for ${FRONTEND_URL}`);
+  });
+}).catch((err) => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
+});
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -54,8 +71,4 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ success: false, error: err.message || 'Internal server error' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
-  console.log(`📡 CORS enabled for ${FRONTEND_URL}`);
-});
+// Note: server is started after DB initialization above.

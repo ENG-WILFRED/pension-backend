@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import AppDataSource from '../lib/data-source';
 import { AccountType } from '../entities/AccountType';
@@ -68,6 +68,79 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     return res.status(201).json({ success: true, accountType: saved });
   } catch (error) {
     console.error('Create account type error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/account-types:
+ *   get:
+ *     tags:
+ *       - Accounts
+ *     summary: List available account types
+ *     responses:
+ *       '200':
+ *         description: List of account types
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 accountTypes:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AccountType'
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const list = await accountTypeRepo.find({ where: { active: true }, order: { name: 'ASC' } });
+    return (res as any).json({ success: true, accountTypes: list });
+  } catch (error) {
+    console.error('List account types error:', error);
+    return (res as any).status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/account-types/{id}:
+ *   get:
+ *     tags:
+ *       - Accounts
+ *     summary: Get details for a single account type
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       '200':
+ *         description: Account type details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 accountType:
+ *                   $ref: '#/components/schemas/AccountType'
+ *       '404':
+ *         description: Not found
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const at = await accountTypeRepo.findOne({ where: { id } });
+    if (!at) return res.status(404).json({ success: false, error: 'Account type not found' });
+    return res.json({ success: true, accountType: at });
+  } catch (error) {
+    console.error('Get account type error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
