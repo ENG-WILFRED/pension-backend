@@ -21,17 +21,12 @@ import axios from 'axios';
  *             type: object
  *             required:
  *               - email
- *               - username
  *               - phone
  *             properties:
  *               email:
  *                 type: string
  *                 format: email
  *                 example: user@example.com
- *               username:
- *                 type: string
- *                 minLength: 1
- *                 example: john_doe
  *               phone:
  *                 type: string
  *                 example: '+254712345678'
@@ -236,7 +231,6 @@ const childSchema = z.object({
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
-  username: z.string().min(1, 'Username is required'),
   phone: z.string().min(1, 'Phone number is required for payment'),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
@@ -279,7 +273,6 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const {
       email,
-      username,
       phone,
       firstName,
       lastName,
@@ -300,13 +293,12 @@ router.post('/register', async (req: Request, res: Response) => {
       retirementAge,
     } = validation.data;
 
-    // Check if user already exists by email or username
+    // Check if user already exists by email or phone
     const existingByEmail = await prisma.user.findUnique({ where: { email } });
     if (existingByEmail) return res.status(400).json({ success: false, error: 'Email already registered' });
-    const existingByUsername = (await prisma.user.findMany({ where: { username } }))?.[0];
-    if (existingByUsername) return res.status(400).json({ success: false, error: 'Username already taken' });
     const existingByPhone = (await prisma.user.findMany({ where: { phone } }))?.[0];
     if (existingByPhone) return res.status(400).json({ success: false, error: 'Phone number already registered' });
+  // Check if user already exists by email or phone
 
     // Initiate M-Pesa STK Push payment
     try {
@@ -338,7 +330,6 @@ router.post('/register', async (req: Request, res: Response) => {
             type: 'registration',
             metadata: {
               email,
-              username,
               hashedTemporaryPassword: hashedTempPassword,
               temporaryPasswordPlain: tempPassword,
               phone,
@@ -409,7 +400,6 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
       const metadata = (transaction.metadata ?? {}) as any;
       const {
         email,
-        username,
         hashedTemporaryPassword,
         temporaryPasswordPlain,
         firstName,
@@ -449,7 +439,6 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
         user = await prisma.user.create({
           data: {
             email,
-            username,
             password: hashedTemporaryPassword,
             passwordIsTemporary: true,
             firstName,
@@ -520,7 +509,6 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
               data: {
                 name: firstName || 'User',
                 temporaryPassword: temporaryPasswordPlain,
-                username,
               },
             });
             console.log('[Register] Sent email with temporary password to', email);

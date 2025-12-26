@@ -251,11 +251,11 @@ async function waitForRegistrationCompletion(transactionId) {
 Standard password login.
 
 Request body (JSON):
-- `identifier` (string) — email or username, required.
+- `identifier` (string) — email or phone, required.
 - `password` (string) — required.
 
-Behavior:
-- Finds user by `email` or `username`.
+- Behavior:
+- Finds user by `email` or `phone`.
 - Compares provided password with stored hash.
 - On failed password: increments `failedLoginAttempts`.
   - If attempts >= 3: generates a 6-digit OTP, stores `otpCode` and `otpExpiry` (10 minutes), sends OTP email, returns `403` with an OTP notice.
@@ -295,7 +295,7 @@ Notes:
 Login using the OTP sent to the user's email.
 
 Request body (JSON):
-- `identifier` (string) — email or username, required.
+- `identifier` (string) — email or phone, required.
 - `otp` (string) — the OTP code, required.
 
 Behavior:
@@ -337,7 +337,7 @@ curl -H "Authorization: Bearer <token>" https://api.example.com/api/auth/verify
 
 ## Field reference (server-side names)
 - `email` (string) — unique
-- `username` (string) — unique, nullable
+<!-- username field removed: was unique and nullable -->
 - `password` (string) — stored as bcrypt-hash
 - `firstName` / `lastName` (string)
 - `phone` (string)

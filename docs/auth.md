@@ -18,7 +18,6 @@ This document provides complete details about authentication endpoints, required
 
 **Required Fields:**
 - `email` (string, email format) - User's email address
-- `username` (string, min 1 char) - Unique username for login
 - `phone` (string) - Phone number for M-Pesa payment
 
 **Optional Fields:**
@@ -44,7 +43,7 @@ This document provides complete details about authentication endpoints, required
 ```json
 {
   "email": "john@example.com",
-  "username": "john_doe",
+  
   "phone": "+254712345678",
   "firstName": "John",
   "lastName": "Doe",
@@ -139,9 +138,9 @@ This document provides complete details about authentication endpoints, required
 
 **What Happens After Successful Registration:**
 - Temporary password is automatically generated
-- Email is sent with temporary password and username
+- Email is sent with temporary password
 - SMS is sent with temporary password
-- User can login with username/email/phone + temporary password
+- User can login with email/phone + temporary password
 - On first login, user must set a permanent password
 
 ---
@@ -153,13 +152,13 @@ This document provides complete details about authentication endpoints, required
 **Purpose:** Verify password and send OTP
 
 **Required Fields:**
-- `identifier` (string) - User's email, username, or phone number
+- `identifier` (string) - User's email or phone number
 - `password` (string) - User's password (temporary or permanent)
 
 **Request Example:**
 ```json
 {
-  "identifier": "john_doe",
+  "identifier": "john@example.com",
   "password": "abc12345"
 }
 ```
@@ -202,8 +201,8 @@ This document provides complete details about authentication endpoints, required
 
 **Purpose:** Verify OTP and complete login (set permanent password if needed)
 
-**Required Fields:**
-- `identifier` (string) - User's email, username, or phone
+- **Required Fields:**
+- `identifier` (string) - User's email or phone
 - `otp` (string) - 6-digit OTP from email
 
 **Optional Fields:**
@@ -212,7 +211,7 @@ This document provides complete details about authentication endpoints, required
 **Request Example - Regular Login:**
 ```json
 {
-  "identifier": "john_doe",
+  "identifier": "john@example.com",
   "otp": "123456"
 }
 ```
@@ -220,7 +219,7 @@ This document provides complete details about authentication endpoints, required
 **Request Example - First-Time Login (Setting Permanent Password):**
 ```json
 {
-  "identifier": "john_doe",
+  "identifier": "john@example.com",
   "otp": "123456",
   "newPassword": "myPermanentPassword123"
 }
@@ -232,7 +231,7 @@ This document provides complete details about authentication endpoints, required
   "success": true,
   "temporary": true,
   "message": "Please set your permanent password",
-  "identifier": "john_doe"
+  "identifier": "john@example.com"
 }
 ```
 
@@ -312,7 +311,7 @@ User Registration:
 
 ```
 User Login:
-1. POST /api/auth/login (email/username/phone + password)
+1. POST /api/auth/login (email/phone + password)
    ↓
 2. Password verified
    ↓
@@ -361,8 +360,8 @@ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
 
 ## 7. NOTIFICATIONS SENT
 
-**During Registration (after payment):**
-- **Email:** Contains temporary password, username, and login instructions
+- **During Registration (after payment):**
+- **Email:** Contains temporary password and login instructions
 - **SMS:** Contains temporary password only
 
 **During Login:**

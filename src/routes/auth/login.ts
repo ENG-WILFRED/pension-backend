@@ -31,7 +31,7 @@ import { hashPassword } from '../../lib/auth';
  *             properties:
  *               identifier:
  *                 type: string
- *                 description: User's email, username, or phone number
+ *                 description: User's email or phone number
  *                 example: "+254712345678"
  *               password:
  *                 type: string
@@ -83,7 +83,7 @@ import { hashPassword } from '../../lib/auth';
  *             properties:
  *               identifier:
  *                 type: string
- *                 description: User's email, username, or phone number
+ *                 description: User's email or phone number
  *               otp:
  *                 type: string
  *                 example: "123456"
@@ -156,7 +156,7 @@ import { hashPassword } from '../../lib/auth';
  *         description: Password set successfully
  *       '401':
  *         description: Unauthorized
- *       '400':
+                description: User's email or phone number
  *         description: Validation error
  *       '500':
  *         description: Internal server error
@@ -194,12 +194,12 @@ import { hashPassword } from '../../lib/auth';
 const router = Router();
 
 const loginSchema = z.object({
-  identifier: z.string().min(1, 'Email or username is required'),
+  identifier: z.string().min(1, 'Email or phone is required'),
   password: z.string().min(1, 'Password is required'),
 });
 
 const otpLoginSchema = z.object({
-  identifier: z.string().min(1, 'Email or username is required'),
+  identifier: z.string().min(1, 'Email or phone is required'),
   otp: z.string().min(4, 'OTP is required'),
 });
 
@@ -229,8 +229,8 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const { identifier, password } = validation.data;
 
-    // Find user by email, username, or phone
-    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { username: identifier }, { phone: identifier }] });
+    // Find user by email or phone
+    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { phone: identifier }] });
     if (!user) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
@@ -286,7 +286,7 @@ router.post('/login/otp', async (req: Request, res: Response) => {
     }
 
     const { identifier, otp, newPassword } = validation.data as { identifier: string; otp: string; newPassword?: string };
-    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { username: identifier }, { phone: identifier }] });
+    const user = await prisma.user.findFirst({ where: [{ email: identifier }, { phone: identifier }] });
     if (!user || !user.otpCode) {
       return res.status(401).json({ success: false, error: 'Invalid OTP or credentials' });
     }
