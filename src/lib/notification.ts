@@ -1,38 +1,34 @@
-import axios from 'axios';
-
-const NOTIFY_URL = process.env.NOTIFY_URL || 'http://localhost:5371';
+import kafkaProducer from './kafkaProducer';
 
 export async function notify(payload: Record<string, any>) {
-  try {
-    const res = await axios.post(`${NOTIFY_URL}/notify`, payload, { timeout: 5000 });
-    return res.data;
-  } catch (err) {
-    // rethrow so callers can decide to fallback
-    throw err;
-  }
+  const id = payload.id || `msg-${Date.now()}`;
+  const kafkaPayload = {
+    id,
+    to: payload.to,
+    channel: payload.channel || 'email',
+    template: payload.template,
+    data: payload.data || {},
+    timestamp: Date.now(),
+  };
+
+  await kafkaProducer.publishNotification(kafkaPayload as any);
+  return { id };
 }
 
 export async function sendOtpNotification(to: string, template: string, channel: string, otp: string, name?: string, expiryMinutes = 10) {
   const idempotencyKey = `otp-${to}-${Date.now()}`;
 
   const payload = {
+    id: idempotencyKey,
     to,
     channel,
     template,
     data: { name, otp, expiryMinutes },
-    idempotency_key: idempotencyKey,
+    timestamp: Date.now(),
   };
 
-  try {
-    const result = await notify(payload);
-    return result?.id || idempotencyKey;
-  } catch (err) {
-    // If notification service unavailable, fallback to SMTP/email sender if configured{
-    console.error('Notification service error:', err);
-      // surface original error
-      throw err;
-    
-  }
+  await kafkaProducer.publishNotification(payload as any);
+  return idempotencyKey;
 }
 
 export default { notify, sendOtpNotification };

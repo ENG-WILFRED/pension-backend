@@ -333,6 +333,7 @@ router.post('/register', async (req: Request, res: Response) => {
       phone,
       firstName,
       lastName,
+      pin,
       dateOfBirth,
       gender,
       maritalStatus,
