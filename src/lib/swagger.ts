@@ -268,19 +268,7 @@ const options = {
     ],
   },
   apis: [
-    './src/routes/health.ts',
-    './src/routes/auth/register.ts',
-    './src/routes/auth/promote.ts',
-    './src/routes/auth/login.ts',
-    './src/routes/accounts.ts',
-    './src/routes/account-types.ts',
-    './src/routes/users.ts',
-    './src/routes/payment/index.ts',
-    './src/routes/payment/handlers/initiate.ts',
-    './src/routes/payment/handlers/status.ts',
-    './src/routes/payment/handlers/callback.ts',
-    './src/routes/dashboard.ts',
-    './src/routes/terms-and-conditions.ts',
+    './src/routes/**/*.ts',
   ],
 };
 
