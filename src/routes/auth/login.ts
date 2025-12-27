@@ -19,6 +19,7 @@ import { hashPassword } from '../../lib/auth';
  *       If the password is valid, the server generates a one-time code (OTP), stores it on the user,
  *       and sends the OTP via the Notification Service to the user's email. No token or user data
  *       is returned by this endpoint — tokens are issued only after OTP verification.
+ *       If the `identifier` is a phone number the `password` field may alternatively contain a 4-digit PIN (digits only). PINs are stored hashed on the server and are valid only for phone-based login.
  *     requestBody:
  *       required: true
  *       content:
@@ -151,6 +152,10 @@ import { hashPassword } from '../../lib/auth';
  *               password:
  *                 type: string
  *                 minLength: 6
+ *               pin:
+ *                 type: string
+ *                 description: Optional 4-digit PIN (digits only). If provided it will be stored hashed and can be used to login when using phone number.
+ *                 example: "1234"
  *     responses:
  *       '200':
  *         description: Password set successfully
@@ -235,8 +240,20 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    // Verify password
-    const passwordMatch = await comparePasswords(password, user.password || '');
+    // Verify password OR (when logging in with phone) 4-digit PIN
+    let passwordMatch = false;
+    const isPhoneLogin = user.phone && user.phone === identifier;
+
+    // If identifier is phone and input looks like a 4-digit numeric PIN, try PIN compare
+    if (isPhoneLogin && /^\d{4}$/.test(password) && user.pin) {
+      passwordMatch = await comparePasswords(password, user.pin || '');
+    }
+
+    // Fallback to password compare (normal flow)
+    if (!passwordMatch) {
+      passwordMatch = await comparePasswords(password, user.password || '');
+    }
+
     if (!passwordMatch) {
       // increment failed attempts
       const attempts = (user.failedLoginAttempts || 0) + 1;
@@ -258,7 +275,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
-    // At this point password is valid. For both temporary and permanent-password users
+    // At this point password (or PIN) is valid. For both temporary and permanent-password users
     // we do not return token or user data yet. Instead generate a one-time code (OTP),
     // persist it and send it via the notification service. The client will call
     // POST /api/auth/login/otp to verify the code (and optionally set a permanent
@@ -332,9 +349,118 @@ router.post('/set-password', requireAuth, async (req: AuthRequest, res: Response
     }
 
     const userId = (req.user as any).userId;
+    const updates: any = {};
     const hashed = await hashPassword(body.password);
-    await prisma.user.update({ where: { id: userId }, data: { password: hashed, passwordIsTemporary: false } });
-    return res.json({ success: true, message: 'Password set successfully' });
+    updates.password = hashed;
+    updates.passwordIsTemporary = false;
+
+    // Optional: set a 4-digit PIN (only digits allowed). Store hashed.
+    if (body.pin !== undefined) {
+      if (typeof body.pin !== 'string' || !/^\d{4}$/.test(body.pin)) {
+        return res.status(400).json({ success: false, error: 'PIN must be a 4-digit string of digits' });
+      }
+      const hashedPin = await hashPassword(body.pin);
+      updates.pin = hashedPin;
+    }
+
+    await prisma.user.update({ where: { id: userId }, data: updates });
+    return res.json({ success: true, message: 'Password (and optional PIN) set successfully' });
+  } catch (error) {
+    console.error('Set password error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/set-password:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Set or change a permanent password (authenticated)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *               pin:
+ *                 type: string
+ *                 description: Optional 4-digit PIN (digits only). If provided it will be stored hashed and can be used to login when using phone number.
+ *                 example: "1234"
+ *     responses:
+ *       '200':
+ *         description: Password set successfully
+ *       '401':
+ *         description: Unauthorized
+ *       '400':
+ *         description: Validation error
+ *       '500':
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/auth/verify:
+ *   get:
+ *     tags:
+ *       - Authentication
+ *     summary: Verify JWT token
+ *     description: Verifies the validity of a JWT token
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Token is valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 user:
+ *                   type: object
+ *       '401':
+ *         description: Invalid or missing token
+ *       '500':
+ *         description: Internal server error
+ */
+
+// POST /api/auth/set-password - set a permanent password (requires auth)
+router.post('/set-password', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const body = req.body as any;
+    if (!body || !body.password || typeof body.password !== 'string' || body.password.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
+    }
+
+    const userId = (req.user as any).userId;
+    const updates: any = {};
+    const hashed = await hashPassword(body.password);
+    updates.password = hashed;
+    updates.passwordIsTemporary = false;
+
+    // Optional: set a 4-digit PIN (only digits allowed). Store hashed.
+    if (body.pin !== undefined) {
+      if (typeof body.pin !== 'string' || !/^\d{4}$/.test(body.pin)) {
+        return res.status(400).json({ success: false, error: 'PIN must be a 4-digit string of digits' });
+      }
+      const hashedPin = await hashPassword(body.pin);
+      updates.pin = hashedPin;
+    }
+
+    await prisma.user.update({ where: { id: userId }, data: updates });
+    return res.json({ success: true, message: 'Password (and optional PIN) set successfully' });
   } catch (error) {
     console.error('Set password error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

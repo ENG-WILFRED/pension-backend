@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../../../lib/prisma';
 import AppDataSource from '../../../lib/data-source';
+import { Account } from '../../../entities/Account';
 
 /**
  * @swagger
@@ -181,6 +182,35 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
     console.log(
       `[M-Pesa Callback] Transaction ${transaction.id} updated to status: ${status}`,
     );
+
+    // If this payment was for an account deposit/contribution, credit the account balances
+    try {
+      if (status === 'completed' && (updated.type === 'payment' || updated.type === 'contribution' || updated.type === 'deposit')) {
+        const accountId = (updated as any).accountId as number | undefined;
+        if (accountId) {
+          try {
+            const accountRepo = AppDataSource.getRepository(Account);
+            // Use repository to respect entity naming
+            const account: any = await accountRepo.findOne({ where: { id: accountId } });
+            if (account) {
+              const amt = Number(updated.amount || 0);
+              account.currentBalance = Number(account.currentBalance || 0) + amt;
+              account.availableBalance = Number(account.availableBalance || 0) + amt;
+              account.lastContributionAt = new Date();
+              account.lastTransactionId = updated.id;
+              await accountRepo.save(account);
+              console.log(`[M-Pesa Callback] Credited account ${accountId} with amount ${amt}`);
+            } else {
+              console.warn(`[M-Pesa Callback] Account ${accountId} not found to credit`);
+            }
+          } catch (acctErr) {
+            console.error('[M-Pesa Callback] Failed updating account balances:', acctErr);
+          }
+        }
+      }
+    } catch (acctFlowErr) {
+      console.error('[M-Pesa Callback] Account credit flow error:', acctFlowErr);
+    }
 
     // If this was a registration transaction and succeeded, create the user from metadata
     try {

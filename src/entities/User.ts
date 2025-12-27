@@ -20,6 +20,10 @@ export class User {
   @Column({ nullable: true })
   password?: string;
 
+  // Optional 4-digit PIN stored as a hashed string. Can be used to login when using phone number.
+  @Column({ nullable: true })
+  pin?: string;
+
   @Column({ type: 'boolean', default: false })
   passwordIsTemporary!: boolean;
 

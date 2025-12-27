@@ -305,6 +305,7 @@ const registerSchema = z.object({
   accountStatus: z.enum(['ACTIVE', 'SUSPENDED', 'CLOSED', 'FROZEN', 'DECEASED']).optional().default('ACTIVE'),
   kycVerified: z.boolean().optional().default(false),
   complianceStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']).optional().default('PENDING'),
+  pin: z.string().regex(/^\d{4}$/, 'PIN must be 4 digits').optional(),
 });
 
 function computeAge(dob?: string | null): number | undefined {
@@ -384,6 +385,17 @@ router.post('/register', async (req: Request, res: Response) => {
         const tempPassword = Math.random().toString(36).slice(2, 10); // 8 char temporary password
         const hashedTempPassword = await hashPassword(tempPassword);
 
+        // If user supplied a 4-digit PIN at registration, hash and persist it in metadata
+        let hashedPin: string | null = null;
+        if (validation.data.pin) {
+          try {
+            hashedPin = await hashPassword(validation.data.pin);
+          } catch (e) {
+            console.error('[Register] Failed hashing PIN:', e);
+            hashedPin = null;
+          }
+        }
+
         const transaction = await prisma.transaction.create({
           data: {
             amount: 1,
@@ -394,6 +406,7 @@ router.post('/register', async (req: Request, res: Response) => {
               email,
               hashedTemporaryPassword: hashedTempPassword,
               temporaryPasswordPlain: tempPassword,
+              hashedPin,
               phone,
               firstName,
               lastName,
@@ -464,7 +477,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
     }
 
     // If payment completed, automatically complete registration
-    if (transaction.status === 'completed' && transaction.type === 'registration') {
+      if (transaction.status === 'completed' && transaction.type === 'registration') {
       const metadata = (transaction.metadata ?? {}) as any;
       const {
         email,
@@ -536,6 +549,8 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
             retirementAge: retirementAge || null,
             // Ensure new registrations are customers by default
             role: 'customer',
+            // Set hashed PIN if provided during registration
+            ...(metadata.hashedPin ? { pin: metadata.hashedPin } : {}),
           },
         });
       }

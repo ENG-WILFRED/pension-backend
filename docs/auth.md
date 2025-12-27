@@ -45,6 +45,7 @@ This document provides complete details about authentication endpoints, required
 - `accountStatus` (string, enum) - Account status: ACTIVE, SUSPENDED, CLOSED, FROZEN, DECEASED (default: ACTIVE)
 - `kycVerified` (boolean) - KYC verification status (default: false)
 - `complianceStatus` (string, enum) - Compliance status: PENDING, APPROVED, REJECTED, SUSPENDED (default: PENDING)
+- `pin` (string) - Optional 4-digit numeric PIN to set at registration. If provided it will be stored hashed and may be used to login with phone number.
 
 **Request Example:**
 ```json
@@ -160,6 +161,7 @@ This document provides complete details about authentication endpoints, required
   - `RRRRRRRR`: 8 random digits (0-9)
 - User can login with email/phone + temporary password
 - On first login, user must set a permanent password
+- Users may optionally set a 4-digit numeric `pin` (stored hashed). When logging in with a phone number the `pin` may be used in place of the password. PINs are only valid for phone-based login and must be 4 digits.
 - The auto-created account is ready for contributions and transactions
 
 ---
@@ -173,6 +175,9 @@ This document provides complete details about authentication endpoints, required
 **Required Fields:**
 - `identifier` (string) - User's email or phone number
 - `password` (string) - User's password (temporary or permanent)
+
+Notes:
+- If `identifier` is the user's phone number, the `password` field may alternatively contain the user's 4-digit `pin` (digits only). The `pin` is stored hashed on the server and treated like a credential only for phone-based logins.
 
 **Request Example:**
 ```json
@@ -243,6 +248,8 @@ This document provides complete details about authentication endpoints, required
   "newPassword": "myPermanentPassword123"
 }
 ```
+
+If the user set a PIN via the `POST /api/auth/set-password` endpoint, they may use the PIN instead of their password when `identifier` is their phone number.
 
 **Success Response - First-Time User (Needs Password) (200):**
 ```json

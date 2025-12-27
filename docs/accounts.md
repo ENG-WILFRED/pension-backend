@@ -71,3 +71,29 @@ Create account using legacy enum:
   "riskProfile": "MEDIUM"
 }
 ```
+
+## Depositing funds into an account
+
+Customers can deposit funds into their pension accounts using the M-Pesa STK Push flow. The API will initiate an M-Pesa prompt to the customer's phone and record a pending transaction; when the payment gateway calls back the configured webhook the account balance will be credited.
+
+- Endpoint: `POST /api/accounts/{id}/deposit`
+- Auth: Bearer token (customer must be authenticated)
+- Path param: `id` (account numeric id)
+- Body:
+  - `amount` (number, required) — amount to deposit
+  - `phone` (string, optional) — phone to receive M-Pesa prompt, defaults to user's phone on record
+  - `description` (string, optional)
+
+Response on success (200):
+```json
+{
+  "success": true,
+  "status": "payment_initiated",
+  "message": "Payment initiated. Please check your phone for the M-Pesa prompt.",
+  "transactionId": "<uuid>",
+  "checkoutRequestId": "<checkout-id>",
+  "statusCheckUrl": "/api/payment/status/<transactionId>"
+}
+```
+
+The payment gateway will call the configured callback `/api/payment/callback` when the payment completes; successful payments will be applied to the account's `currentBalance` and `availableBalance` and the transaction will be marked `completed`.
