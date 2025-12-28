@@ -1,5 +1,5 @@
+import { Kafka, logLevel } from 'kafkajs';
 import dotenv from 'dotenv';
-import { Kafka, Producer } from 'kafkajs';
 
 dotenv.config();
 
@@ -12,33 +12,70 @@ export interface NotificationPayload {
   timestamp: number;
 }
 
-let producer: Producer | null = null;
 let kafkaClient: Kafka | null = null;
+let producer: any | null = null;
 let producerInitializing = false;
-let producerError: Error | null = null;
 
-const KAFKA_CONNECT_TIMEOUT = 10000; // 10 seconds
 const KAFKA_ENABLED = process.env.KAFKA_ENABLED !== 'false'; // Default to enabled
 
-function buildBrokersList(): string[] {
-  const brokersEnv = process.env.KAFKA_BROKER || process.env.KAFKA_BROKERS;
-  return Array.isArray(brokersEnv) ? brokersEnv : String(brokersEnv).split(',').map((b) => b.trim());
+/**
+ * Get or create a Kafka client with SASL/SSL configuration
+ * For Aiven Kafka service, use environment variables:
+ * - KAFKA_BROKERS: comma-separated broker list
+ * - KAFKA_SASL_USERNAME: username for SASL
+ * - KAFKA_SASL_PASSWORD: password for SASL
+ * - KAFKA_SASL_MECHANISM: SASL mechanism (default: scram-sha-256)
+ */
+function getKafkaClient(): Kafka {
+  if (kafkaClient) return kafkaClient;
+
+  const brokerString = process.env.KAFKA_BROKERS || process.env.KAFKA_BROKER || 'localhost:9092';
+  const brokers = Array.isArray(brokerString) 
+    ? brokerString 
+    : String(brokerString).split(',').map((b) => b.trim());
+
+  const kafkaOptions: any = {
+    clientId: process.env.KAFKA_CLIENT_ID || 'pension-backend-producer',
+    brokers,
+    logLevel: logLevel.WARN,
+    connectionTimeout: 15000,
+    requestTimeout: 30000,
+    retry: {
+      initialRetryTime: 300,
+      retries: 8,
+      maxRetryTime: 30000,
+      randomizationFactor: 0.2,
+      multiplier: 2
+    }
+  };
+
+  // Add SASL/SSL if credentials are present
+  if (process.env.KAFKA_SASL_USERNAME && process.env.KAFKA_SASL_PASSWORD) {
+    kafkaOptions.ssl = {
+      rejectUnauthorized: false
+    };
+    kafkaOptions.sasl = {
+      mechanism: (process.env.KAFKA_SASL_MECHANISM || 'scram-sha-256') as any,
+      username: process.env.KAFKA_SASL_USERNAME,
+      password: process.env.KAFKA_SASL_PASSWORD
+    };
+    console.log(`[KAFKA-PRODUCER] Connecting to ${brokers.join(',')} with SASL/SSL`);
+  } else {
+    console.log(`[KAFKA-PRODUCER] Connecting to ${brokers.join(',')} without SASL/SSL`);
+  }
+
+  kafkaClient = new Kafka(kafkaOptions);
+  return kafkaClient;
 }
 
-export async function createProducer(): Promise<Producer | null> {
+export async function createProducer(): Promise<any | null> {
   if (!KAFKA_ENABLED) {
     console.log('[KAFKA-PRODUCER] Kafka is disabled (KAFKA_ENABLED=false)');
     return null;
   }
 
-  // If already cached and no error, return it
+  // If already cached, return it
   if (producer) return producer;
-
-  // If there was a previous error, return null (graceful degradation)
-  if (producerError) {
-    console.warn('[KAFKA-PRODUCER] Previous connection error, skipping retry:', producerError.message);
-    return null;
-  }
 
   // If currently initializing, wait for it
   if (producerInitializing) {
@@ -53,41 +90,22 @@ export async function createProducer(): Promise<Producer | null> {
   producerInitializing = true;
 
   try {
-    const brokers = buildBrokersList();
-    console.log(`[KAFKA-PRODUCER] Connecting to brokers: ${brokers.join(', ')}`);
-
-    // Build Kafka client with SSL/SASL if configured
-    const kafkaConfig: any = {
-      clientId: process.env.KAFKA_CLIENT_ID || 'notification-service',
-      brokers,
-      connectTimeout: KAFKA_CONNECT_TIMEOUT,
-      requestTimeout: KAFKA_CONNECT_TIMEOUT,
-    };
-
-    // Add SASL authentication if credentials provided
-    if (process.env.KAFKA_SASL_USERNAME && process.env.KAFKA_SASL_PASSWORD) {
-      kafkaConfig.sasl = {
-        mechanism: process.env.KAFKA_SASL_MECHANISM || 'scram-sha-256',
-        username: process.env.KAFKA_SASL_USERNAME,
-        password: process.env.KAFKA_SASL_PASSWORD,
-      };
-      kafkaConfig.ssl = process.env.KAFKA_SSL_ENABLED !== 'false';
-    }
-
-    kafkaClient = new Kafka(kafkaConfig);
-    producer = kafkaClient.producer();
+    const kafka = getKafkaClient();
+    producer = kafka.producer({
+      maxInFlightRequests: 5,
+      idempotent: true,
+      transactionTimeout: 30000,
+    });
 
     await producer.connect();
     console.log('[KAFKA-PRODUCER] ✓ Producer connected successfully');
     producerInitializing = false;
-    producerError = null;
     return producer;
   } catch (err) {
     producerInitializing = false;
-    producerError = err instanceof Error ? err : new Error(String(err));
-    console.error('[KAFKA-PRODUCER] Failed to create producer:', producerError.message);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[KAFKA-PRODUCER] Failed to create producer:', errMsg);
     producer = null;
-    kafkaClient = null;
     return null;
   }
 }
@@ -114,12 +132,8 @@ export async function publishNotification(payload: NotificationPayload): Promise
         {
           key: payload.id,
           value: JSON.stringify(payload),
-          headers: {
-            'content-type': 'application/json',
-            'channel': payload.channel,
-            'template': payload.template,
-          },
-        },
+          timestamp: String(Date.now()),
+        }
       ],
     });
     console.log(`[KAFKA] Message produced: ${payload.id} → ${payload.template} (${payload.channel})`);
@@ -134,12 +148,10 @@ export async function closeProducer(): Promise<void> {
   try {
     await producer.disconnect();
     producer = null;
-    kafkaClient = null;
     console.log('[KAFKA-PRODUCER] Disconnected');
   } catch (err) {
     console.error('[KAFKA-PRODUCER] Disconnect error:', err);
     producer = null;
-    kafkaClient = null;
   }
 }
 
