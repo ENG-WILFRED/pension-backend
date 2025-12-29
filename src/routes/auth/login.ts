@@ -333,7 +333,7 @@ router.post('/login/otp', async (req: Request, res: Response) => {
     await prisma.user.update({ where: { id: user.id }, data: { otpCode: null, otpExpiry: null, failedLoginAttempts: 0 } });
     const age = computeAge(user.dateOfBirth as any);
     const token = generateToken({ userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, age });
-    res.json({ success: true, message: 'Login successful', token, user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName } });
+    res.json({ success: true, message: 'Login successful', token, user: { id: user.id, email: user.email, firstName: user.firstName, role: user.role, lastName: user.lastName } });
   } catch (error) {
     console.error('OTP login error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
