@@ -32,7 +32,7 @@ import { hashPassword } from '../../lib/auth';
  *             properties:
  *               identifier:
  *                 type: string
- *                 description: User's email or phone number
+*                 description: "User's email or phone number"
  *                 example: "+254712345678"
  *               password:
  *                 type: string
@@ -84,7 +84,7 @@ import { hashPassword } from '../../lib/auth';
  *             properties:
  *               identifier:
  *                 type: string
- *                 description: User's email or phone number
+ *                 description: "User's email or phone number"
  *               otp:
  *                 type: string
  *                 example: "123456"
@@ -161,7 +161,7 @@ import { hashPassword } from '../../lib/auth';
  *         description: Password set successfully
  *       '401':
  *         description: Unauthorized
-                description: User's email or phone number
+ *       '400':
  *         description: Validation error
  *       '500':
  *         description: Internal server error

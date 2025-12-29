@@ -1,3 +1,4 @@
+
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../../lib/prisma';
@@ -32,6 +33,12 @@ import { Account } from '../../entities/Account';
  *               phone:
  *                 type: string
  *                 example: '+254712345678'
+ *               pin:
+ *                 type: string
+ *                 description: Optional 4-digit PIN for phone-based login
+ *                 example: '1234'
+ *                 minLength: 4
+ *                 maxLength: 4
  *               firstName:
  *                 type: string
  *               lastName:
@@ -362,7 +369,7 @@ router.post('/register', async (req: Request, res: Response) => {
     if (existingByEmail) return res.status(400).json({ success: false, error: 'Email already registered' });
     const existingByPhone = (await prisma.user.findMany({ where: { phone } }))?.[0];
     if (existingByPhone) return res.status(400).json({ success: false, error: 'Phone number already registered' });
-  // Check if user already exists by email or phone
+    // Check if user already exists by email or phone
 
     // Initiate M-Pesa STK Push payment
     try {
@@ -478,7 +485,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
     }
 
     // If payment completed, automatically complete registration
-      if (transaction.status === 'completed' && transaction.type === 'registration') {
+    if (transaction.status === 'completed' && transaction.type === 'registration') {
       const metadata = (transaction.metadata ?? {}) as any;
       const {
         email,
