@@ -488,4 +488,130 @@ router.get('/verify', (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/auth/resend-otp:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Resend OTP to user
+ *     description: |
+ *       Resends OTP to a user's registered email and phone.
+ *       Validates that:
+ *       1. User exists with the given identifier (email or phone)
+ *       2. An OTP was previously generated for this user
+ *       3. The OTP is not expired
+ *       If all checks pass, a new OTP is generated and sent via the Notification Service
+ *       to both email and SMS channels.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - identifier
+ *             properties:
+ *               identifier:
+ *                 type: string
+ *                 description: User's email or phone number
+ *                 example: "+254712345678"
+ *     responses:
+ *       '200':
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "OTP resent to your email and phone"
+ *       '401':
+ *         description: Invalid identifier or no OTP found
+ *       '410':
+ *         description: OTP has expired
+ *       '400':
+ *         description: Bad request (validation error)
+ *       '500':
+ *         description: Internal server error
+ */
+
+const resendOtpSchema = z.object({
+  identifier: z.string().min(1, 'Email or phone is required'),
+});
+
+router.post('/resend-otp', async (req: Request, res: Response) => {
+  try {
+    const validation = resendOtpSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        error: validation.error.issues[0].message,
+      });
+    }
+
+    const { identifier } = validation.data;
+
+    // Find user by email or phone
+    const user = await prisma.user.findFirst({
+      where: [{ email: identifier }, { phone: identifier }],
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Check if user has a previously generated OTP
+    if (!user.otpCode || !user.otpExpiry) {
+      return res.status(401).json({
+        success: false,
+        error: 'No OTP found. Please initiate login first.',
+      });
+    }
+
+    // Check if OTP is expired
+    if (new Date() > user.otpExpiry) {
+      return res.status(410).json({
+        success: false,
+        error: 'OTP has expired. Please initiate login again.',
+      });
+    }
+
+    // Generate new OTP
+    const newOtp = generateOtp(6);
+    const newExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { otpCode: newOtp, otpExpiry: newExpiry },
+    });
+
+    console.log(`Resend OTP for user ${user.email}: ${newOtp} (expires ${newExpiry.toISOString()})`);
+
+    // Send OTP via email
+    sendOtpNotification(user.email, 'otp', 'email', newOtp, user.firstName, 10).catch((e) =>
+      console.error('Failed sending OTP via email', e)
+    );
+
+    // Send OTP via SMS
+    sendOtpNotification(user.phone, 'otp', 'sms', newOtp, user.firstName, 10).catch((e) =>
+      console.error('Failed sending OTP via SMS', e)
+    );
+
+    return res.json({
+      success: true,
+      message: 'OTP resent to your email and phone',
+    });
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 export default router;

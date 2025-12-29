@@ -14,7 +14,22 @@ const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 // Middleware
-app.use(express.json());
+// Accept JSON with larger limit and lenient parsing
+app.use(express.json({ limit: '50mb', strict: false }));
+// Accept URL-encoded data with larger limit
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Accept raw text/plain, HTML, and any other content type
+app.use(express.raw({ type: '*/*', limit: '50mb' }));
+// Custom error handler for JSON parse errors - convert to text body
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    // JSON parse error - treat body as raw text and store in req.body.body
+    const rawContent = (err as any).body;
+    req.body = { body: typeof rawContent === 'string' ? rawContent : rawContent?.toString() };
+    return next();
+  }
+  next(err);
+});
 app.use(cors({
   origin: '*',
   credentials: false,
