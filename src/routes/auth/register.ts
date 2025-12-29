@@ -39,6 +39,22 @@ import { Account } from '../../entities/Account';
  *                 example: '1234'
  *                 minLength: 4
  *                 maxLength: 4
+ *               bankAccountName:
+ *                 type: string
+ *                 description: Optional bank account name for the user
+ *                 example: "John Doe"
+ *               bankAccountNumber:
+ *                 type: string
+ *                 description: Optional bank account number (customer bank account)
+ *                 example: "1234567890"
+ *               bankBranchName:
+ *                 type: string
+ *                 description: Optional bank branch name
+ *                 example: "Nairobi - West"
+ *               bankBranchCode:
+ *                 type: string
+ *                 description: Optional bank branch code
+ *                 example: "011"
  *               firstName:
  *                 type: string
  *               lastName:
@@ -313,6 +329,11 @@ const registerSchema = z.object({
   kycVerified: z.boolean().optional().default(false),
   complianceStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']).optional().default('PENDING'),
   pin: z.string().regex(/^\d{4}$/, 'PIN must be 4 digits').optional(),
+  // Optional bank details
+  bankAccountName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  bankBranchName: z.string().optional(),
+  bankBranchCode: z.string().optional(),
 });
 
 function computeAge(dob?: string | null): number | undefined {
@@ -513,6 +534,10 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
         riskProfile,
         currency,
         accountStatus,
+        bankAccountName,
+        bankAccountNumber,
+        bankBranchName,
+        bankBranchCode,
         kycVerified,
         complianceStatus,
       } = metadata;
@@ -583,13 +608,21 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
           lockedBalance: 0,
           kycVerified,
           complianceStatus,
+          // bank details (optional)
+          bankAccountName: bankAccountName ?? null,
+          // bankAccountNumber is the customer's bank account; pension accountNumber is generated below
+          bankAccountNumber: bankAccountNumber ?? null,
+          bankBranchName: bankBranchName ?? null,
+          bankBranchCode: bankBranchCode ?? null,
         });
         // Save to obtain numeric auto-increment id
         createdAccount = await accountRepo.save(account);
-        // Set accountNumber as zero-padded 8-digit string from id
-        const padded = String(createdAccount.id).padStart(8, '0');
-        createdAccount.accountNumber = padded;
-        await accountRepo.save(createdAccount);
+        // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
+        if (!createdAccount.accountNumber) {
+          const padded = String(createdAccount.id).padStart(8, '0');
+          createdAccount.accountNumber = padded;
+          await accountRepo.save(createdAccount);
+        }
         console.log('[Register] Auto-created default pension account for user', user.id);
       } catch (accountError) {
         console.error('[Register] Failed to auto-create account:', accountError);
