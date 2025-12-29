@@ -266,9 +266,10 @@ router.post('/login', async (req: Request, res: Response) => {
         updates.otpCode = otp;
         updates.otpExpiry = expiry;
         await prisma.user.update({ where: { id: user.id }, data: updates });
-        // send OTP to user's email (fire-and-forget)
-        sendOtpNotification(user.phone, 'otp', 'sms', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP notification', e));
-        return res.status(403).json({ success: false, error: 'Too many failed attempts. An OTP has been sent to your registered email.' });
+        // send OTP to user's phone (SMS) and email (fire-and-forget)
+        sendOtpNotification(user.phone, 'otp', 'sms', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP via SMS', e));
+        sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP via email', e));
+        return res.status(403).json({ success: false, error: 'Too many failed attempts. An OTP has been sent to your registered email and phone.' });
       }
 
       await prisma.user.update({ where: { id: user.id }, data: updates });
@@ -285,8 +286,10 @@ router.post('/login', async (req: Request, res: Response) => {
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
     await prisma.user.update({ where: { id: user.id }, data: { otpCode: otp, otpExpiry: expiry, failedLoginAttempts: 0 } });
     console.log(`Login OTP for user ${user.email}: ${otp} (expires ${expiry.toISOString()})`);
-    sendOtpNotification(user.phone, 'otp', 'sms', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP on login', e));
-    sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP on login', e));
+    console.log(`[LOGIN] Sending OTP via SMS to ${user.phone}`);
+    sendOtpNotification(user.phone, 'otp', 'sms', otp, user.firstName, 10).catch((e) => console.error('[LOGIN] Failed sending OTP via SMS:', e));
+    console.log(`[LOGIN] Sending OTP via email to ${user.email}`);
+    sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('[LOGIN] Failed sending OTP via email:', e));
 
     return res.json({ success: true, message: 'OTP sent to your email and phone' });
   } catch (error) {
