@@ -171,6 +171,95 @@ const updateSchema = z.object({
  *           type: string
  *     requestBody:
  *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               pin:
+ *                 type: string
+ *               passwordIsTemporary:
+ *                 type: boolean
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
+ *               gender:
+ *                 type: string
+ *               maritalStatus:
+ *                 type: string
+ *               language:
+ *                 type: string
+ *               spouseName:
+ *                 type: string
+ *               spouseDob:
+ *                 type: string
+ *                 format: date
+ *               children:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     dob:
+ *                       type: string
+ *                       format: date
+ *               numberOfChildren:
+ *                 type: integer
+ *               failedLoginAttempts:
+ *                 type: integer
+ *               otpCode:
+ *                 type: string
+ *               otpExpiry:
+ *                 type: string
+ *                 format: date-time
+ *               nationalId:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               city:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *               occupation:
+ *                 type: string
+ *               employer:
+ *                 type: string
+ *               salary:
+ *                 type: number
+ *               contributionRate:
+ *                 type: number
+ *               retirementAge:
+ *                 type: integer
+ *               kraPin:
+ *                 type: string
+ *               nssfNumber:
+ *                 type: string
+ *               kraVerified:
+ *                 type: boolean
+ *               nssfVerified:
+ *                 type: boolean
+ *               role:
+ *                 type: string
+ *               createdAt:
+ *                 type: string
+ *                 format: date-time
+ *               updatedAt:
+ *                 type: string
+ *                 format: date-time
+ *             additionalProperties: false
  *     responses:
  *       '200':
  *         description: Updated user
