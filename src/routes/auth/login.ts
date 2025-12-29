@@ -286,8 +286,9 @@ router.post('/login', async (req: Request, res: Response) => {
     await prisma.user.update({ where: { id: user.id }, data: { otpCode: otp, otpExpiry: expiry, failedLoginAttempts: 0 } });
     console.log(`Login OTP for user ${user.email}: ${otp} (expires ${expiry.toISOString()})`);
     sendOtpNotification(user.phone, 'otp', 'sms', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP on login', e));
+    sendOtpNotification(user.email, 'otp', 'email', otp, user.firstName, 10).catch((e) => console.error('Failed sending OTP on login', e));
 
-    return res.json({ success: true, message: 'OTP sent to your email' });
+    return res.json({ success: true, message: 'OTP sent to your email and phone' });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });

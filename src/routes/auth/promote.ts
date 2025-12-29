@@ -12,16 +12,29 @@ const promoteSchema = z.object({
   message: 'Either email or userId is required',
 });
 
+const promoteCreateSchema = z.object({
+  email: z.string().email(),
+  phone: z.string().min(1),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  gender: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  country: z.string().optional(),
+});
+
 /**
  * @swagger
- * /api/auth/promote:
+ * /api/auth/makeadmin:
  *   post:
  *     tags:
  *       - Authentication
- *     summary: Promote a customer to admin
+ *     summary: Create or promote an admin
  *     description: |
- *       Promote an existing user with role `customer` to `admin`. Only callers with a valid
- *       admin Bearer token may perform this action. The target user must already be a customer.
+ *       Create a new admin user (by an existing admin) or promote an existing customer to admin.
+ *       Creating a new admin requires `email` and `phone`. Promoting an existing user accepts
+ *       either `email` or `userId`.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -31,6 +44,28 @@ const promoteSchema = z.object({
  *           schema:
  *             type: object
  *             oneOf:
+ *               - required: [email, phone]
+ *                 properties:
+ *                   email:
+ *                     type: string
+ *                     format: email
+ *                   phone:
+ *                     type: string
+ *                   firstName:
+ *                     type: string
+ *                   lastName:
+ *                     type: string
+ *                   dateOfBirth:
+ *                     type: string
+ *                     format: date
+ *                   gender:
+ *                     type: string
+ *                   address:
+ *                     type: string
+ *                   city:
+ *                     type: string
+ *                   country:
+ *                     type: string
  *               - required: [email]
  *                 properties:
  *                   email:
@@ -43,7 +78,7 @@ const promoteSchema = z.object({
  *                     format: uuid
  *     responses:
  *       '200':
- *         description: User promoted successfully
+ *         description: User promoted or created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -63,23 +98,74 @@ const promoteSchema = z.object({
  *       '404':
  *         description: Target user not found
  */
-router.post('/promote', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post('/makeadmin', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    // Allow two flows:
+    // 1) promote existing user by email or userId (use promoteSchema)
+    // 2) create new admin user with provided details (use promoteCreateSchema)
+
+    const payload = req.user as any;
+    // Ensure caller is an admin
+    const caller = await prisma.user.findUnique({ where: { id: payload.userId } });
+    if (!caller || caller.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Only admins can promote users' });
+    }
+
+    // If body matches create schema, create new admin user
+    const createValidation = promoteCreateSchema.safeParse(req.body);
+    if (createValidation.success) {
+      const data = createValidation.data;
+      // Check if user already exists
+      let user = await prisma.user.findUnique({ where: { email: data.email } });
+      if (user) {
+        // If exists, update role to admin and update details
+        await prisma.user.update({ where: { id: user.id }, data: { role: 'admin', phone: data.phone, firstName: data.firstName, lastName: data.lastName, dateOfBirth: data.dateOfBirth || null, gender: data.gender || null, address: data.address || null, city: data.city || null, country: data.country || null} });
+        // Send notification that they've been promoted and possibly password reset not required
+        return res.json({ success: true, message: 'Existing user promoted to admin' });
+      }
+
+      // Create temporary password and create user
+      const tempPassword = Math.random().toString(36).slice(2, 10);
+      const hashed = await (await import('../../lib/auth')).hashPassword(tempPassword).catch((e) => { throw e; });
+
+      user = await prisma.user.create({
+        data: {
+          email: data.email,
+          phone: data.phone,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          dateOfBirth: data.dateOfBirth || null,
+          gender: data.gender || null,
+          address: data.address || null,
+          city: data.city || null,
+          country: data.country || null,
+          password: hashed,
+          passwordIsTemporary: true,
+          role: 'admin',
+        },
+      });
+
+      // Send temporary password via notification (email and/or sms)
+      try {
+        const { notify } = await import('../../lib/notification');
+        await Promise.all([
+          notify({ to: data.email, channel: 'email', template: 'welcome', data: { name: data.firstName || 'User', temporaryPassword: tempPassword } }).catch((e) => console.error('Email notify failed', e)),
+          notify({ to: data.phone, channel: 'sms', template: 'welcome', data: { name: data.firstName || 'User', temp_password: tempPassword } }).catch((e) => console.error('SMS notify failed', e)),
+        ]);
+      } catch (e) {
+        console.error('Failed sending notifications for new admin:', e);
+      }
+
+      return res.json({ success: true, message: 'Admin user created and temporary password sent' });
+    }
+
+    // Otherwise, attempt to promote existing user (by email or userId)
     const validation = promoteSchema.safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({ success: false, error: validation.error.issues[0].message });
     }
 
     const { email, userId } = validation.data;
-
-    // Caller payload attached by requireAuth
-    const payload = req.user as any;
-
-    // Ensure caller is an admin
-    const caller = await prisma.user.findUnique({ where: { id: payload.userId } });
-    if (!caller || caller.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Only admins can promote users' });
-    }
 
     // Find target user
     const target = email
