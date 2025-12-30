@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
   headers: Request['headers'];
   params: Request['params'];
   body: Request['body'];
+  query: Request['query'];
 }
 
 export default function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
