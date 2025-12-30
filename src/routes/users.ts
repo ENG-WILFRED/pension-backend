@@ -55,7 +55,6 @@ router.get('/user-names-by-phone', async (req, res: Response) => {
     // Use findFirst because the prisma compatibility wrapper only supports
     // findUnique for `email` and `id`. Searching by phone must use findFirst.
     const user = await prisma.user.findFirst({ where: [{ phone }] });
-    console.log('user-names-by-phone user:', user ,phone);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     // Respond with first name and last name as JSON
