@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
+import { hashPassword } from '../lib/auth';
 import requireAuth, { AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -133,6 +134,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 });
 
 const updateSchema = z.object({
+  pin: z.string().regex(/^\d{4}$/, 'PIN must be 4 digits').optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   phone: z.string().optional(),
@@ -279,7 +281,20 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    const updated = await prisma.user.update({ where: { id }, data: validation.data });
+    // If caller provided a PIN, hash it before persisting
+    let updateData: any = validation.data;
+    if (updateData.pin) {
+      try {
+        const hashedPin = await hashPassword(updateData.pin);
+        updateData = { ...updateData, pin: hashedPin };
+      } catch (e) {
+        console.error('[Update user] Failed hashing PIN:', e);
+        // continue without setting PIN if hashing fails
+        delete updateData.pin;
+      }
+    }
+
+    const updated = await prisma.user.update({ where: { id }, data: updateData });
     return res.json({ success: true, user: updated });
   } catch (error) {
     console.error('Update user error:', error);

@@ -73,6 +73,7 @@ function computeAge(dob?: string | null): number | undefined {
 }
 
 router.post('/ussd-login', async (req: Request, res: Response) => {
+  console.log('USSD login attempt with body:', req.body);
   try {
     const validation = ussdSchema.safeParse(req.body);
     if (!validation.success) {
@@ -82,15 +83,37 @@ router.post('/ussd-login', async (req: Request, res: Response) => {
     const { phone, pin } = validation.data;
 
     const user = await prisma.user.findFirst({ where: { phone } });
+
     if (!user) {
+      console.log('[USSD login] user not found for phone:', phone);
+
+      // Temporary debug: list all users' id and phone to inspect stored values
+      try {
+        const all = await prisma.user.findMany();
+        console.log('[USSD login] all users count:', all.length);
+        all.forEach((u: any) => console.log('[USSD login] user:', u.id, u.phone));
+      } catch (e) {
+        console.error('[USSD login] failed fetching all users for debug:', e);
+      }
+
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
 
     if (!user.pin) {
+      console.log('[USSD login] PIN not set for user:', user.id);
       return res.status(401).json({ success: false, error: 'PIN not set for this user' });
     }
 
-    const match = await comparePasswords(pin, user.pin || '');
+    // Debug logging: show provided PIN, a prefix of stored hash and compare result
+    try {
+      console.log('[USSD login] providedPin:', pin);
+      console.log('[USSD login] storedPinHashPrefix:', user.pin.slice(0, 16), 'len=', user.pin.length);
+    } catch (e) {
+      console.error('[USSD login] Failed printing debug info:', e);
+    }
+
+    const match = await comparePasswords(pin, user.pin);
+    console.log('[USSD login] compare result for phone', phone, ':', match);
     if (!match) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }

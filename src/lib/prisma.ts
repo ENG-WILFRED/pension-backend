@@ -29,6 +29,7 @@ export default {
 			}
 			if (where && where.email) return repo.findOneBy({ email: where.email });
 			if (where && where.id) return repo.findOneBy({ id: where.id });
+			if (where && where.phone) return repo.findOneBy({ phone: where.phone });
 			return null;
 		},
 
