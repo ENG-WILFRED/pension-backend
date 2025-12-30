@@ -269,6 +269,42 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
             console.log(`[M-Pesa Callback] Linked transaction ${transaction.id} to user ${user.id}`);
           }
 
+          // Auto-create default pension account for new user
+          let createdAccount: any = null;
+          try {
+            const accountRepo = AppDataSource.getRepository(Account);
+            const account = accountRepo.create({
+              userId: user.id,
+              accountType: meta.accountType || 'MANDATORY',
+              accountStatus: meta.accountStatus || 'ACTIVE',
+              riskProfile: meta.riskProfile || 'MEDIUM',
+              currency: meta.currency || 'KES',
+              openedAt: new Date(),
+              currentBalance: 0,
+              availableBalance: 0,
+              lockedBalance: 0,
+              kycVerified: meta.kycVerified || false,
+              complianceStatus: meta.complianceStatus || 'PENDING',
+              // bank details (optional)
+              bankAccountName: meta.bankAccountName ?? null,
+              bankAccountNumber: meta.bankAccountNumber ?? null,
+              bankBranchName: meta.bankBranchName ?? null,
+              bankBranchCode: meta.bankBranchCode ?? null,
+            });
+            // Save to obtain numeric auto-increment id
+            createdAccount = await accountRepo.save(account);
+            // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
+            if (!createdAccount.accountNumber) {
+              const padded = String(createdAccount.id).padStart(8, '0');
+              createdAccount.accountNumber = padded;
+              await accountRepo.save(createdAccount);
+            }
+            console.log(`[M-Pesa Callback] Auto-created default pension account ${createdAccount.id} for user ${user.id}`);
+          } catch (accountError) {
+            console.error('[M-Pesa Callback] Failed to auto-create account:', accountError);
+            // Don't fail the callback if account creation fails
+          }
+
           // Send temporary password to user via both email and SMS
           try {
             const { notify } = await import('../../../lib/notification');
