@@ -12,7 +12,7 @@ const router = Router();
  * /api/users/user-names-by-phone:
  *   get:
  *     tags:
- *       - Dashboard
+ *       - Users
  *     summary: Get a user's first and last name by phone number (public)
  *     description: Returns the first name and last name for a user identified by phone. No authentication required.
  *     parameters:
@@ -74,20 +74,53 @@ router.get('/user-names-by-phone', async (req, res: Response) => {
  * /api/users:
  *   get:
  *     tags:
- *       - Dashboard
- *     summary: List users (admin only)
+ *       - Users
+ *     summary: List all registered users (admin only)
+ *     description: Returns all registered users without sensitive data (password, pin, otp, etc.)
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       '200':
  *         description: List of users
+ *       '403':
+ *         description: Admin only
  */
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const caller = await prisma.user.findUnique({ where: { id: (req.user as any).userId } });
     if (!caller || caller.role !== 'admin') return res.status(403).json({ success: false, error: 'Admins only' });
     const users = await prisma.user.findMany();
-    return res.json({ success: true, users });
+    
+    // Filter out sensitive data
+    const sanitizedUsers = users.map(u => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      phone: u.phone,
+      dateOfBirth: u.dateOfBirth,
+      gender: u.gender,
+      maritalStatus: u.maritalStatus,
+      language: u.language,
+      nationalId: u.nationalId,
+      address: u.address,
+      city: u.city,
+      country: u.country,
+      occupation: u.occupation,
+      employer: u.employer,
+      salary: u.salary,
+      contributionRate: u.contributionRate,
+      retirementAge: u.retirementAge,
+      kraPin: u.kraPin,
+      nssfNumber: u.nssfNumber,
+      kraVerified: u.kraVerified,
+      nssfVerified: u.nssfVerified,
+      role: u.role,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+    }));
+    
+    return res.json({ success: true, users: sanitizedUsers });
   } catch (error) {
     console.error('List users error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -99,7 +132,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
  * /api/users/{id}:
  *   get:
  *     tags:
- *       - Dashboard
+ *       - Users
  *     summary: Get a user by id (self or admin)
  *     security:
  *       - bearerAuth: []
@@ -161,7 +194,7 @@ const updateSchema = z.object({
  * /api/users/{id}:
  *   put:
  *     tags:
- *       - Dashboard
+ *       - Users
  *     summary: Update a user (self or admin)
  *     security:
  *       - bearerAuth: []
@@ -307,7 +340,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
  * /api/users/{id}:
  *   delete:
  *     tags:
- *       - Dashboard
+ *       - Users
  *     summary: Delete a user (admin only)
  *     security:
  *       - bearerAuth: []
