@@ -13,6 +13,107 @@ const options = {
         email: 'kimaniwilfred95@gmail.com',
       },
     },
+    paths: {
+      '/api/reports/generate-transaction': {
+        post: {
+          tags: ['Reports'],
+          summary: 'Generate a transactions PDF report and save it as base64',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GenerateTransactionRequest' },
+                examples: {
+                  example1: {
+                    value: {
+                      title: 'Monthly Transactions',
+                      transactions: [
+                        { id: 'tx1', type: 'payment', amount: 100.5, status: 'completed', createdAt: new Date().toISOString() },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Report generated', content: { 'application/json': { schema: { $ref: '#/components/schemas/GenerateResponse' } } } },
+            '400': { description: 'Bad request', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+            '401': { description: 'Unauthorized' },
+            '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          },
+        },
+      },
+      '/api/reports/generate-customer': {
+        post: {
+          tags: ['Reports'],
+          summary: 'Generate a customer PDF report and save it as base64',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GenerateCustomerRequest' },
+                examples: {
+                  example1: {
+                    value: {
+                      title: 'Customer Report',
+                      user: { id: 'user1', email: 'jane@example.com', firstName: 'Jane', lastName: 'Doe' },
+                      transactions: [],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Report generated', content: { 'application/json': { schema: { $ref: '#/components/schemas/GenerateResponse' } } } },
+            '400': { description: 'Bad request', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+            '401': { description: 'Unauthorized' },
+            '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          },
+        },
+      },
+      '/api/reports': {
+        get: {
+          tags: ['Reports'],
+          summary: 'List reports',
+          security: [{ bearerAuth: [] }],
+          responses: {
+            '200': { description: 'List of reports', content: { 'application/json': { schema: { $ref: '#/components/schemas/ReportListResponse' } } } },
+            '401': { description: 'Unauthorized' },
+            '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          },
+        },
+      },
+      '/api/reports/{id}': {
+        get: {
+          tags: ['Reports'],
+          summary: 'Get report by id',
+          security: [{ bearerAuth: [] }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+          responses: {
+            '200': { description: 'Report', content: { 'application/json': { schema: { $ref: '#/components/schemas/Report' } } } },
+            '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+            '401': { description: 'Unauthorized' },
+            '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          },
+        },
+        delete: {
+          tags: ['Reports'],
+          summary: 'Delete report by id',
+          security: [{ bearerAuth: [] }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+          responses: {
+            '200': { description: 'Deleted', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' } } } } } },
+            '404': { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+            '401': { description: 'Unauthorized' },
+            '500': { description: 'Server error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          },
+        },
+      },
+    },
     servers: [
       {
         url: 'http://localhost:5000',
@@ -32,6 +133,56 @@ const options = {
         },
       },
       schemas: {
+        Report: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            type: { type: 'string', description: "'transactions' or 'customer'" },
+            title: { type: 'string' },
+            fileName: { type: 'string' },
+            pdfBase64: { type: 'string', description: 'Base64 encoded PDF string' },
+            metadata: { type: 'object' },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        GenerateTransactionRequest: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', example: 'Transactions Report' },
+            transactions: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Transaction' },
+            },
+          },
+          required: ['transactions'],
+        },
+        GenerateCustomerRequest: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', example: 'Customer Report' },
+            user: { $ref: '#/components/schemas/User' },
+            transactions: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Transaction' },
+            },
+          },
+          required: ['user', 'transactions'],
+        },
+        GenerateResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            reportId: { type: 'string', format: 'uuid' },
+            message: { type: 'string' },
+          },
+        },
+        ReportListResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: { $ref: '#/components/schemas/Report' } },
+          },
+        },
         Error: {
           type: 'object',
           properties: {
@@ -264,6 +415,10 @@ const options = {
       {
         name: 'Terms and Conditions',
         description: 'Retrieve and update terms and conditions documents',
+      },
+      {
+        name: 'Reports',
+        description: 'Generate, list, retrieve and delete PDF reports (stored as base64)',
       },
     ],
   },

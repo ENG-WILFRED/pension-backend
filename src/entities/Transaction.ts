@@ -24,6 +24,9 @@ export class Transaction {
   @Column('double precision')
   amount!: number;
 
+  @Column({ nullable: true })
+  title?: string;
+
   @Column()
   type!: string;
 

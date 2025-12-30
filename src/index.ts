@@ -57,17 +57,21 @@ AppDataSource.initialize().then(async () => {
   const accountRoutes = (await import('./routes/accounts')).default;
   const accountTypeRoutes = (await import('./routes/account-types')).default;
   const paymentRoutes = (await import('./routes/payment')).default;
+  const transactionRoutes = (await import('./routes/transactions')).default;
   const dashboardRoutes = (await import('./routes/dashboard')).default;
   const healthRoutes = (await import('./routes/health')).default;
   const termsAndConditionsRoutes = (await import('./routes/terms-and-conditions')).default;
+  const reportRoutes = (await import('./routes/reports')).default;
 
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/accounts', accountRoutes);
   app.use('/api/account-types', accountTypeRoutes);
   app.use('/api/payment', paymentRoutes);
+  app.use('/api/transactions', transactionRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
+    app.use('/api/reports', reportRoutes);
   app.use('/api', healthRoutes);
 
   // Start server after DB initialized and routes mounted
