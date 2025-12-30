@@ -350,9 +350,15 @@ router.post('/register', async (req: Request, res: Response) => {
   try {
     const validation = registerSchema.safeParse(req.body);
     if (!validation.success) {
+      const issues = validation.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+        code: i.code,
+      }));
       return res.status(400).json({
         success: false,
-        error: validation.error.issues[0].message,
+        error: 'Validation failed',
+        issues,
       });
     }
 
@@ -387,9 +393,9 @@ router.post('/register', async (req: Request, res: Response) => {
 
     // Check if user already exists by email or phone
     const existingByEmail = await prisma.user.findUnique({ where: { email } });
-    if (existingByEmail) return res.status(400).json({ success: false, error: 'Email already registered' });
+    if (existingByEmail) return res.status(409).json({ success: false, error: 'Email already registered', field: 'email' });
     const existingByPhone = (await prisma.user.findMany({ where: { phone } }))?.[0];
-    if (existingByPhone) return res.status(400).json({ success: false, error: 'Phone number already registered' });
+    if (existingByPhone) return res.status(409).json({ success: false, error: 'Phone number already registered', field: 'phone' });
     // Check if user already exists by email or phone
 
     // Initiate M-Pesa STK Push payment
