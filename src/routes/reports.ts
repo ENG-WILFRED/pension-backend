@@ -18,8 +18,9 @@ router.post('/generate-transaction', requireAuth, async (req: Request, res: Resp
       return res.status(400).json({ success: false, error: 'transactions array is required' });
     }
 
-    const pdfBase64 = await generateTransactionPdf(transactions, title);
-  const reportRepository = AppDataSource.getRepository(Report);
+    const buffer = await generateTransactionPdf(transactions, title);
+    const pdfBase64 = buffer.toString('base64');
+    const reportRepository = AppDataSource.getRepository(Report);
 
     const report = reportRepository.create({
       type: 'transactions',
@@ -56,8 +57,9 @@ router.post('/generate-customer', requireAuth, async (req: Request, res: Respons
       return res.status(400).json({ success: false, error: 'transactions array is required' });
     }
 
-    const pdfBase64 = await generateCustomerPdf(user, transactions, title);
-  const reportRepository = AppDataSource.getRepository(Report);
+    const buffer = await generateCustomerPdf(user, transactions, title);
+    const pdfBase64 = buffer.toString('base64');
+    const reportRepository = AppDataSource.getRepository(Report);
 
     const report = reportRepository.create({
       type: 'customer',

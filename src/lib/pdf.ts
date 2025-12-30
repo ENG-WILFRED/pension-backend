@@ -1,8 +1,15 @@
 import PDFDocument from 'pdfkit';
-// Use require to avoid moduleResolution/type issues for get-stream
-const getStream: any = require('get-stream');
 
-export async function generateTransactionPdf(transactions: any[], title = 'Transactions Report'): Promise<string> {
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', (err) => reject(err));
+  });
+}
+
+export async function generateTransactionPdf(transactions: any[], title = 'Transactions Report'): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
   doc.fontSize(18).text(title, { align: 'center' });
   doc.moveDown();
@@ -16,12 +23,11 @@ export async function generateTransactionPdf(transactions: any[], title = 'Trans
   });
 
   doc.end();
-  // get-stream converts stream into a buffer
-  const buffer = await (getStream as any).buffer(doc as any);
-  return buffer.toString('base64');
+  const buffer = await streamToBuffer(doc as any);
+  return buffer;
 }
 
-export async function generateCustomerPdf(user: any, transactions: any[], title = 'Customer Report'): Promise<string> {
+export async function generateCustomerPdf(user: any, transactions: any[], title = 'Customer Report'): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
   doc.fontSize(18).text(title, { align: 'center' });
   doc.moveDown();
@@ -43,7 +49,6 @@ export async function generateCustomerPdf(user: any, transactions: any[], title 
   });
 
   doc.end();
-  // @ts-ignore
-  const buffer = await (getStream as any).buffer(doc as any);
-  return buffer.toString('base64');
+  const buffer = await streamToBuffer(doc as any);
+  return buffer;
 }

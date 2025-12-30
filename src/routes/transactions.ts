@@ -15,6 +15,41 @@ const router = Router();
  *     description: Returns all transactions. Use `?pdf=true` to get a generated PDF file.
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: pdf
+ *         schema:
+ *           type: boolean
+ *         description: If true, returns a PDF file attachment of the transactions
+ *     responses:
+ *       '200':
+ *         description: Successful response with transactions or PDF
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 transactions:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Transaction'
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       '401':
+ *         $ref: '#/components/schemas/Error'
+ *       '403':
+ *         description: Forbidden - admin only
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       '500':
+ *         $ref: '#/components/schemas/Error'
  */
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
