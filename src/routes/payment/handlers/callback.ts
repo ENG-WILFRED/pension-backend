@@ -217,16 +217,18 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
       if (status === 'completed' && (updated.type === 'registration' || transaction.type === 'registration')) {
         const meta = (updated.metadata ?? {}) as any;
         const email = meta.email as string | undefined;
-        const hashedPassword = meta.hashedPassword as string | undefined;
+        const hashedTemporaryPassword = meta.hashedTemporaryPassword as string | undefined;
+        const temporaryPasswordPlain = meta.temporaryPasswordPlain as string | undefined;
 
-        if (email && hashedPassword) {
+        if (email && hashedTemporaryPassword) {
           // Build user payload from metadata
           const children = Array.isArray(meta.children) ? meta.children : undefined;
           const numberOfChildren = Array.isArray(children) ? children.length : null;
 
           const userData: any = {
             email,
-            password: hashedPassword,
+            password: hashedTemporaryPassword,
+            passwordIsTemporary: true,
             firstName: meta.firstName || null,
             lastName: meta.lastName || null,
             phone: meta.phone || null,
@@ -246,6 +248,8 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
             salary: typeof meta.salary === 'string' ? Number(meta.salary) : meta.salary ?? null,
             contributionRate: typeof meta.contributionRate === 'string' ? Number(meta.contributionRate) : meta.contributionRate ?? null,
             retirementAge: typeof meta.retirementAge === 'string' ? Number(meta.retirementAge) : meta.retirementAge ?? null,
+            role: 'customer',
+            ...(meta.hashedPin ? { pin: meta.hashedPin } : {}),
           };
 
           // Idempotent create-or-update: if user exists update, otherwise create
@@ -264,8 +268,50 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
             await prisma.transaction.update({ where: { id: transaction.id }, data: { userId: user.id } });
             console.log(`[M-Pesa Callback] Linked transaction ${transaction.id} to user ${user.id}`);
           }
+
+          // Send temporary password to user via both email and SMS
+          try {
+            const { notify } = await import('../../../lib/notification');
+            if (temporaryPasswordPlain && user) {
+              // Send email with temporary password
+              try {
+                await notify({
+                  to: email,
+                  channel: 'email',
+                  template: 'welcome',
+                  data: {
+                    name: meta.firstName || 'User',
+                    temp_password: temporaryPasswordPlain,
+                    link: process.env.FRONTEND_URL || 'https://transactions-k6gk.onrender.com/login'
+                  },
+                });
+                console.log(`[M-Pesa Callback] Sent welcome email to ${email}`);
+              } catch (emailError) {
+                console.error(`[M-Pesa Callback] Failed sending email notification: ${emailError}`);
+              }
+
+              // Send SMS with temporary password
+              try {
+                await notify({
+                  to: meta.phone,
+                  channel: 'sms',
+                  template: 'welcome',
+                  data: {
+                    name: meta.firstName || 'User',
+                    temp_password: temporaryPasswordPlain,
+                    link: process.env.FRONTEND_URL || 'https://transactions-k6gk.onrender.com/login'
+                  },
+                });
+                console.log(`[M-Pesa Callback] Sent welcome SMS to ${meta.phone}`);
+              } catch (smsError) {
+                console.error(`[M-Pesa Callback] Failed sending SMS notification: ${smsError}`);
+              }
+            }
+          } catch (notificationErr) {
+            console.error('[M-Pesa Callback] Error sending notifications:', notificationErr);
+          }
         } else {
-          console.warn(`[M-Pesa Callback] Registration metadata missing email/hashedPassword for transaction ${transaction.id}`);
+          console.warn(`[M-Pesa Callback] Registration metadata missing email/hashedTemporaryPassword for transaction ${transaction.id}`);
         }
       }
     } catch (userErr) {
