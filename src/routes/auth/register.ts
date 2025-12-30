@@ -389,6 +389,10 @@ router.post('/register', async (req: Request, res: Response) => {
       accountStatus,
       kycVerified,
       complianceStatus,
+      bankAccountName,
+      bankAccountNumber,
+      bankBranchName,
+      bankBranchCode,
     } = validation.data;
 
     // Check if user already exists by email or phone
@@ -466,6 +470,10 @@ router.post('/register', async (req: Request, res: Response) => {
               accountStatus,
               kycVerified,
               complianceStatus,
+              bankAccountName,
+              bankAccountNumber,
+              bankBranchName,
+              bankBranchCode,
             },
           },
         });
