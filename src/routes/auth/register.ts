@@ -8,6 +8,24 @@ import axios from 'axios';
 import AppDataSource from '../../lib/data-source';
 import { Account } from '../../entities/Account';
 
+// Poll payment gateway /health until it returns { status: 'ok' } or timeout
+async function waitForPaymentGatewayHealth(baseUrl: string, timeoutMs = 60_000, intervalMs = 1000): Promise<boolean> {
+  const start = Date.now();
+  const healthUrl = `${baseUrl.replace(/\/$/, '')}/health`;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const resp = await axios.get(healthUrl, { timeout: 5000 });
+      if (resp && resp.data && resp.data.status === 'ok') {
+        return true;
+      }
+    } catch (e) {
+      // ignore and retry
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
+}
+
 /**
  * @swagger
  * /api/auth/register:
@@ -404,7 +422,16 @@ router.post('/register', async (req: Request, res: Response) => {
 
     // Initiate M-Pesa STK Push payment
     try {
-      const mpesaInitiateUrl = `${process.env.NEXT_PUBLIC_PAYMENT_GATEWAY_URL || 'http://localhost:3001'}/payments/mpesa/initiate`;
+      const paymentGatewayBase = process.env.NEXT_PUBLIC_PAYMENT_GATEWAY_URL || 'http://localhost:3001';
+
+      // Wait up to 60s for payment gateway health to be OK before initiating checkout
+      const healthy = await waitForPaymentGatewayHealth(paymentGatewayBase, 60_000, 1000);
+      if (!healthy) {
+        console.error('[Register] Payment gateway health check failed after timeout');
+        return res.status(503).json({ success: false, error: 'Payment gateway unavailable. Please try again later.' });
+      }
+
+      const mpesaInitiateUrl = `${paymentGatewayBase}/payments/mpesa/initiate`;
       const mpesaResponse = await axios.post(mpesaInitiateUrl, {
         phone,
         amount: 1,
