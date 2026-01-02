@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
+import AppDataSource from '../lib/data-source';
+import { Account } from '../entities/Account';
 import { hashPassword } from '../lib/auth';
 import requireAuth, { AuthRequest } from '../middleware/auth';
 
@@ -161,6 +163,82 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     return res.json({ success: true, user });
   } catch (error) {
     console.error('Get user error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/{id}/bank-details:
+ *   put:
+ *     tags:
+ *       - Users
+ *     summary: Update bank details for a user's account (self or admin)
+ *     description: Update bank account details for a specific account owned by the user. If `accountId` is omitted, the user's first active account will be updated.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               bankAccountName:
+ *                 type: string
+ *               bankAccountNumber:
+ *                 type: string
+ *               bankBranchName:
+ *                 type: string
+ *               bankBranchCode:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Updated account with bank details
+ *       '400':
+ *         description: Invalid input
+ *       '401':
+ *         description: Unauthorized
+ *       '403':
+ *         description: Forbidden
+ *       '404':
+ *         description: Account or user not found
+ */
+router.put('/:id/bank-details', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const callerId = (req.user as any).userId;
+    const caller = await prisma.user.findUnique({ where: { id: callerId } });
+    if (!caller) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    if (caller.role !== 'admin' && callerId !== id) return res.status(403).json({ success: false, error: 'Forbidden' });
+
+    const { bankAccountName, bankAccountNumber, bankBranchName, bankBranchCode } = req.body as any;
+
+    // Find the user's active account by the user id in the path
+    const accountRepo = AppDataSource.getRepository(Account);
+    const accountEntity: any = await accountRepo.findOne({ where: { userId: id, accountStatus: 'ACTIVE' } as any });
+    if (!accountEntity) return res.status(404).json({ success: false, error: 'No active account found for user' });
+
+    const updateData: any = {};
+    if (bankAccountName !== undefined) updateData.bankAccountName = bankAccountName;
+    if (bankAccountNumber !== undefined) updateData.bankAccountNumber = bankAccountNumber;
+    if (bankBranchName !== undefined) updateData.bankBranchName = bankBranchName;
+    if (bankBranchCode !== undefined) updateData.bankBranchCode = bankBranchCode;
+
+    if (Object.keys(updateData).length === 0) return res.status(400).json({ success: false, error: 'No bank details provided' });
+
+    await accountRepo.update(accountEntity.id, updateData);
+    const updated = await accountRepo.findOneBy({ id: accountEntity.id } as any);
+    return res.json({ success: true, account: updated });
+  } catch (error) {
+    console.error('Update bank details error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
