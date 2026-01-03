@@ -64,13 +64,18 @@ const depositSchema = z.object({
  */
 router.post('/:id/deposit', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ success: false, error: 'Invalid account id' });
-    const userId = (req.user as any).userId;
+    // Accept account number in the path (e.g. "00000001") and look up account by `accountNumber`.
+    const accountNumber = String(req.params.id || '').trim();
+    if (!accountNumber || !/^\d+$/.test(accountNumber)) {
+      return res.status(400).json({ success: false, error: 'Invalid account number' });
+    }
 
+    const userId = (req.user as any).userId;
     const data = depositSchema.parse(req.body);
 
-    const account = await accountRepo.findOne({ where: { id, userId } });
+    // Find account by accountNumber. Don't require the authenticated user to match the account owner,
+    // since deposits can be made to any valid account number.
+    const account = await accountRepo.findOne({ where: { accountNumber } });
     if (!account) return res.status(404).json({ success: false, error: 'Account not found' });
 
     // Initiate payment via external payment gateway (same as registration flow)
@@ -79,8 +84,8 @@ router.post('/:id/deposit', requireAuth, async (req: AuthRequest, res: Response)
       const mpesaResponse = await import('axios').then(({ default: axios }) => axios.post(mpesaInitiateUrl, {
         phone: data.phone || (req.user as any).phone || null,
         amount: data.amount,
-        referenceId: `Acct-${account.id}-${userId}`,
-        accountReference: `ACC-${account.id}`,
+        referenceId: `Acct-${account.accountNumber}-${userId}`,
+        accountReference: `ACC-${account.accountNumber}`,
         transactionDesc: data.description || 'Account Deposit',
         stkCallback: `${process.env.BACKEND_URL}/api/payment/callback`,
       }));
@@ -93,13 +98,13 @@ router.post('/:id/deposit', requireAuth, async (req: AuthRequest, res: Response)
         userId,
         accountId: account.id,
         amount: Number(data.amount),
-        type: 'contribution',
+        type: 'deposit',
         status: 'pending',
         description: data.description || 'Account deposit',
         checkoutRequestId: checkoutId,
         metadata: {
           phone: data.phone || null,
-          accountReference: `ACC-${account.id}`,
+          accountReference: `ACC-${account.accountNumber}`,
         },
       });
 
