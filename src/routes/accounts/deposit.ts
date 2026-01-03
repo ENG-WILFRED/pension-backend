@@ -18,7 +18,7 @@ const depositSchema = z.object({
 
 /**
  * @swagger
- * /api/accounts/{id}/deposit:
+ * /api/accounts/{accountNumber}/deposit:
  *   post:
  *     tags:
  *       - Accounts
@@ -26,12 +26,13 @@ const depositSchema = z.object({
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - name: id
+ *       - name: accountNumber
  *         in: path
  *         required: true
+ *         description: Account number (8-digit format, e.g., 00000001)
  *         schema:
  *           type: string
- *           format: uuid
+ *           example: "00000001"
  *     requestBody:
  *       required: true
  *       content:
@@ -80,7 +81,7 @@ router.post('/:id/deposit', requireAuth, async (req: AuthRequest, res: Response)
 
     // Initiate payment via external payment gateway (same as registration flow)
     try {
-      const mpesaInitiateUrl = `${process.env.NEXT_PUBLIC_PAYMENT_GATEWAY_URL || 'http://localhost:3001'}/payments/mpesa/initiate`;
+      const mpesaInitiateUrl = `${process.env.NEXT_PUBLIC_PAYMENT_GATEWAY_URL || 'https://payment-gateway-7eta.onrender.com'}/payments/mpesa/initiate`;
       const mpesaResponse = await import('axios').then(({ default: axios }) => axios.post(mpesaInitiateUrl, {
         phone: data.phone || (req.user as any).phone || null,
         amount: data.amount,
