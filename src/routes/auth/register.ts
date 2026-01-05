@@ -73,6 +73,10 @@ async function waitForPaymentGatewayHealth(baseUrl: string, timeoutMs = 60_000, 
  *                 type: string
  *                 description: Optional bank branch code
  *                 example: "011"
+ *               bankName:
+ *                 type: string
+ *                 description: Optional bank name for the customer's bank (e.g. Equity, KCB)
+ *                 example: "Equity"
  *               firstName:
  *                 type: string
  *               lastName:
@@ -349,6 +353,7 @@ const registerSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, 'PIN must be 4 digits').optional(),
   // Optional bank details
   bankAccountName: z.string().optional(),
+  bankName: z.string().optional(),
   bankAccountNumber: z.string().optional(),
   bankBranchName: z.string().optional(),
   bankBranchCode: z.string().optional(),
@@ -408,6 +413,7 @@ router.post('/register', async (req: Request, res: Response) => {
       kycVerified,
       complianceStatus,
       bankAccountName,
+      bankName,
       bankAccountNumber,
       bankBranchName,
       bankBranchCode,
@@ -491,16 +497,17 @@ router.post('/register', async (req: Request, res: Response) => {
               salary,
               contributionRate,
               retirementAge,
-              accountType,
-              riskProfile,
-              currency,
-              accountStatus,
-              kycVerified,
-              complianceStatus,
-              bankAccountName,
-              bankAccountNumber,
-              bankBranchName,
-              bankBranchCode,
+                accountType,
+                riskProfile,
+                currency,
+                accountStatus,
+                kycVerified,
+                complianceStatus,
+                bankAccountName,
+                bankName,
+                bankAccountNumber,
+                bankBranchName,
+                bankBranchCode,
             },
           },
         });
@@ -576,6 +583,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
         currency,
         accountStatus,
         bankAccountName,
+        bankName,
         bankAccountNumber,
         bankBranchName,
         bankBranchCode,
@@ -651,6 +659,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
           complianceStatus,
           // bank details (optional)
           bankAccountName: bankAccountName ?? null,
+          bankName: bankName ?? null,
           // bankAccountNumber is the customer's bank account; pension accountNumber is generated below
           bankAccountNumber: bankAccountNumber ?? null,
           bankBranchName: bankBranchName ?? null,

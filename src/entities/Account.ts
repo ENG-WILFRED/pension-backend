@@ -28,6 +28,9 @@ export class Account {
   @Column({ type: 'varchar', length: 200, nullable: true })
   bankAccountName?: string;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  bankName?: string;
+
   @Column({ type: 'varchar', length: 64, nullable: true })
   bankBranchName?: string;
 
