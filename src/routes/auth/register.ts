@@ -683,48 +683,33 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
       try {
         const { notify } = await import('../../lib/notification');
         if (temporaryPasswordPlain) {
-          // Send SMS with temporary password
-          try {
-            await notify({
-              to: email,
-              channel: 'email',
-              template: 'welcome',
-              data: {
+            // Send SMS and Email with temporary password, include account number if available
+            try {
+              const notificationDataBase: any = {
                 name: firstName || 'User',
                 temp_password: temporaryPasswordPlain,
-                link: "https://transactions-k6gk.onrender.com/login"
-              },
-            });
-            await notify({
-              to: phone,
-              channel: 'sms',
-              template: 'welcome',
-              data: {
-                name: firstName || 'User',
-                temp_password: temporaryPasswordPlain,
-                link: "https://transactions-k6gk.onrender.com/login"
-              },
-            });
-            console.log('[Register] Sent SMS with temporary password to', phone);
-          } catch (smsError) {
-            console.error('[Register] Failed sending SMS notification:', smsError);
-          }
+                link: "https://transactions-k6gk.onrender.com/login",
+              };
+              if (createdAccount && createdAccount.accountNumber) {
+                notificationDataBase.account_number = createdAccount.accountNumber;
+              }
 
-          // Send Email with temporary password
-          try {
-            await notify({
-              to: email,
-              channel: 'email',
-              template: 'welcome',
-              data: {
-                name: firstName || 'User',
-                temporaryPassword: temporaryPasswordPlain,
-              },
-            });
-            console.log('[Register] Sent email with temporary password to', email);
-          } catch (emailError) {
-            console.error('[Register] Failed sending email notification:', emailError);
-          }
+              await notify({
+                to: email,
+                channel: 'email',
+                template: 'welcome',
+                data: notificationDataBase,
+              });
+              await notify({
+                to: phone,
+                channel: 'sms',
+                template: 'welcome',
+                data: notificationDataBase,
+              });
+              console.log('[Register] Sent SMS with temporary password to', phone);
+            } catch (smsError) {
+              console.error('[Register] Failed sending SMS notification:', smsError);
+            }
         }
       } catch (e) {
         console.error('[Register] Failed sending notifications:', e);
