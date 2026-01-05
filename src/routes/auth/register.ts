@@ -689,11 +689,8 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
                 name: firstName || 'User',
                 temp_password: temporaryPasswordPlain,
                 link: "https://transactions-k6gk.onrender.com/login",
+                account_number: createdAccount?.accountNumber || null
               };
-              if (createdAccount && createdAccount.accountNumber) {
-                notificationDataBase.account_number = createdAccount.accountNumber;
-              }
-
               await notify({
                 to: email,
                 channel: 'email',
