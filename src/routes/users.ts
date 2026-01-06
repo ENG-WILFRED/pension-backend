@@ -160,7 +160,24 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-    return res.json({ success: true, user });
+    
+    // Fetch all bank details from user's accounts
+    const accountRepo = AppDataSource.getRepository(Account);
+    const accounts = await accountRepo.find({
+      where: { userId: id } as any,
+      select: {
+        id: true,
+        accountNumber: true,
+        accountType: true,
+        bankAccountName: true,
+        bankName: true,
+        bankBranchName: true,
+        bankBranchCode: true,
+        bankAccountNumber: true,
+      } as any,
+    });
+    
+    return res.json({ success: true, user, bankDetails: accounts });
   } catch (error) {
     console.error('Get user error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
