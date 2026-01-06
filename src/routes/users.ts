@@ -177,7 +177,8 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       } as any,
     });
     
-    return res.json({ success: true, user, bankDetails: accounts });
+    const userWithBankDetails = { ...user, bankDetails: accounts };
+    return res.json({ success: true, user: userWithBankDetails });
   } catch (error) {
     console.error('Get user error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
