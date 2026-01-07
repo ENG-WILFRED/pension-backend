@@ -644,36 +644,48 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
       let createdAccount: any = null;
       try {
         const accountRepo = AppDataSource.getRepository(Account);
-        // Create account without accountNumber so we can obtain numeric id
-        const account = accountRepo.create({
-          userId: user.id,
-          accountType,
-          accountStatus,
-          riskProfile,
-          currency,
-          openedAt: new Date(),
-          currentBalance: 0,
-          availableBalance: 0,
-          lockedBalance: 0,
-          kycVerified,
-          complianceStatus,
-          // bank details (optional)
-          bankAccountName: bankAccountName ?? null,
-          bankName: bankName ?? null,
-          // bankAccountNumber is the customer's bank account; pension accountNumber is generated below
-          bankAccountNumber: bankAccountNumber ?? null,
-          bankBranchName: bankBranchName ?? null,
-          bankBranchCode: bankBranchCode ?? null,
-        });
-        // Save to obtain numeric auto-increment id
-        createdAccount = await accountRepo.save(account);
-        // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
-        if (!createdAccount.accountNumber) {
-          const padded = String(createdAccount.id).padStart(8, '0');
-          createdAccount.accountNumber = padded;
-          await accountRepo.save(createdAccount);
+        // Ensure we don't create duplicate pension account types for the same user
+        const existing = await accountRepo.findOne({ where: { userId: user.id, accountType } });
+        if (existing) {
+          createdAccount = existing;
+          // Ensure accountNumber exists for older records
+          if (!createdAccount.accountNumber) {
+            createdAccount.accountNumber = String(createdAccount.id).padStart(8, '0');
+            await accountRepo.save(createdAccount);
+          }
+          console.log('[Register] Re-used existing pension account for user', user.id);
+        } else {
+          // Create account without accountNumber so we can obtain numeric id
+          const account = accountRepo.create({
+            userId: user.id,
+            accountType,
+            accountStatus,
+            riskProfile,
+            currency,
+            openedAt: new Date(),
+            currentBalance: 0,
+            availableBalance: 0,
+            lockedBalance: 0,
+            kycVerified,
+            complianceStatus,
+            // bank details (optional)
+            bankAccountName: bankAccountName ?? null,
+            bankName: bankName ?? null,
+            // bankAccountNumber is the customer's bank account; pension accountNumber is generated below
+            bankAccountNumber: bankAccountNumber ?? null,
+            bankBranchName: bankBranchName ?? null,
+            bankBranchCode: bankBranchCode ?? null,
+          });
+          // Save to obtain numeric auto-increment id
+          createdAccount = await accountRepo.save(account);
+          // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
+          if (!createdAccount.accountNumber) {
+            const padded = String(createdAccount.id).padStart(8, '0');
+            createdAccount.accountNumber = padded;
+            await accountRepo.save(createdAccount);
+          }
+          console.log('[Register] Auto-created default pension account for user', user.id);
         }
-        console.log('[Register] Auto-created default pension account for user', user.id);
       } catch (accountError) {
         console.error('[Register] Failed to auto-create account:', accountError);
         // Don't fail registration if account creation fails
