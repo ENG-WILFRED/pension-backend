@@ -74,6 +74,10 @@ async function waitForPaymentGatewayHealth(baseUrl: string, timeoutMs = 60_000, 
  *                 type: string
  *                 description: Optional bank branch code
  *                 example: "011"
+ *               bankName:
+ *                 type: string
+ *                 description: Optional bank name for the customer's bank (e.g. Equity, KCB)
+ *                 example: "Equity"
  *               firstName:
  *                 type: string
  *               lastName:
@@ -350,6 +354,7 @@ const registerSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, 'PIN must be 4 digits').optional(),
   // Optional bank details
   bankAccountName: z.string().optional(),
+  bankName: z.string().optional(),
   bankAccountNumber: z.string().optional(),
   bankBranchName: z.string().optional(),
   bankBranchCode: z.string().optional(),
@@ -409,6 +414,7 @@ router.post('/register', async (req: Request, res: Response) => {
       kycVerified,
       complianceStatus,
       bankAccountName,
+      bankName,
       bankAccountNumber,
       bankBranchName,
       bankBranchCode,
@@ -492,16 +498,17 @@ router.post('/register', async (req: Request, res: Response) => {
               salary,
               contributionRate,
               retirementAge,
-              accountType,
-              riskProfile,
-              currency,
-              accountStatus,
-              kycVerified,
-              complianceStatus,
-              bankAccountName,
-              bankAccountNumber,
-              bankBranchName,
-              bankBranchCode,
+                accountType,
+                riskProfile,
+                currency,
+                accountStatus,
+                kycVerified,
+                complianceStatus,
+                bankAccountName,
+                bankName,
+                bankAccountNumber,
+                bankBranchName,
+                bankBranchCode,
             },
           },
         });
@@ -577,6 +584,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
         currency,
         accountStatus,
         bankAccountName,
+        bankName,
         bankAccountNumber,
         bankBranchName,
         bankBranchCode,
@@ -637,43 +645,48 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
       let createdAccount: any = null;
       try {
         const accountRepo = AppDataSource.getRepository(Account);
-        // Create account without accountNumber so we can obtain numeric id
-        const account = accountRepo.create({
-          userId: user.id,
-          accountType,
-          accountStatus,
-          riskProfile,
-          currency,
-          openedAt: new Date(),
-          currentBalance: 0,
-          availableBalance: 0,
-          lockedBalance: 0,
-          kycVerified,
-          complianceStatus,
-        });
-        // Save to obtain numeric auto-increment id
-        createdAccount = await accountRepo.save(account);
-        // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
-        if (!createdAccount.accountNumber) {
-          const padded = String(createdAccount.id).padStart(8, '0');
-          createdAccount.accountNumber = padded;
-          await accountRepo.save(createdAccount);
-        }
-
-        // Create bank details if provided
-        if (bankAccountName || bankAccountNumber || bankBranchName || bankBranchCode) {
-          const bankDetailsRepo = AppDataSource.getRepository(BankDetails);
-          const bankDetails = bankDetailsRepo.create({
-            accountId: createdAccount.id,
-            bankAccountName: bankAccountName ?? undefined,
-            bankAccountNumber: bankAccountNumber ?? undefined,
-            bankBranchName: bankBranchName ?? undefined,
-            bankBranchCode: bankBranchCode ?? undefined,
+        // Ensure we don't create duplicate pension account types for the same user
+        const existing = await accountRepo.findOne({ where: { userId: user.id, accountType } });
+        if (existing) {
+          createdAccount = existing;
+          // Ensure accountNumber exists for older records
+          if (!createdAccount.accountNumber) {
+            createdAccount.accountNumber = String(createdAccount.id).padStart(8, '0');
+            await accountRepo.save(createdAccount);
+          }
+          console.log('[Register] Re-used existing pension account for user', user.id);
+        } else {
+          // Create account without accountNumber so we can obtain numeric id
+          const account = accountRepo.create({
+            userId: user.id,
+            accountType,
+            accountStatus,
+            riskProfile,
+            currency,
+            openedAt: new Date(),
+            currentBalance: 0,
+            availableBalance: 0,
+            lockedBalance: 0,
+            kycVerified,
+            complianceStatus,
+            // bank details (optional)
+            bankAccountName: bankAccountName ?? null,
+            bankName: bankName ?? null,
+            // bankAccountNumber is the customer's bank account; pension accountNumber is generated below
+            bankAccountNumber: bankAccountNumber ?? null,
+            bankBranchName: bankBranchName ?? null,
+            bankBranchCode: bankBranchCode ?? null,
           });
-          await bankDetailsRepo.save(bankDetails);
+          // Save to obtain numeric auto-increment id
+          createdAccount = await accountRepo.save(account);
+          // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
+          if (!createdAccount.accountNumber) {
+            const padded = String(createdAccount.id).padStart(8, '0');
+            createdAccount.accountNumber = padded;
+            await accountRepo.save(createdAccount);
+          }
+          console.log('[Register] Auto-created default pension account for user', user.id);
         }
-
-        console.log('[Register] Auto-created default pension account for user', user.id);
       } catch (accountError) {
         console.error('[Register] Failed to auto-create account:', accountError);
         // Don't fail registration if account creation fails
@@ -683,48 +696,30 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
       try {
         const { notify } = await import('../../lib/notification');
         if (temporaryPasswordPlain) {
-          // Send SMS with temporary password
-          try {
-            await notify({
-              to: email,
-              channel: 'email',
-              template: 'welcome',
-              data: {
+            // Send SMS and Email with temporary password, include account number if available
+            try {
+              const notificationDataBase: any = {
                 name: firstName || 'User',
                 temp_password: temporaryPasswordPlain,
-                link: "https://transactions-k6gk.onrender.com/login"
-              },
-            });
-            await notify({
-              to: phone,
-              channel: 'sms',
-              template: 'welcome',
-              data: {
-                name: firstName || 'User',
-                temp_password: temporaryPasswordPlain,
-                link: "https://transactions-k6gk.onrender.com/login"
-              },
-            });
-            console.log('[Register] Sent SMS with temporary password to', phone);
-          } catch (smsError) {
-            console.error('[Register] Failed sending SMS notification:', smsError);
-          }
-
-          // Send Email with temporary password
-          try {
-            await notify({
-              to: email,
-              channel: 'email',
-              template: 'welcome',
-              data: {
-                name: firstName || 'User',
-                temporaryPassword: temporaryPasswordPlain,
-              },
-            });
-            console.log('[Register] Sent email with temporary password to', email);
-          } catch (emailError) {
-            console.error('[Register] Failed sending email notification:', emailError);
-          }
+                link: "https://transactions-k6gk.onrender.com/login",
+                account_number: createdAccount?.accountNumber || null
+              };
+              await notify({
+                to: email,
+                channel: 'email',
+                template: 'welcome',
+                data: notificationDataBase,
+              });
+              await notify({
+                to: phone,
+                channel: 'sms',
+                template: 'welcome',
+                data: notificationDataBase,
+              });
+              console.log('[Register] Sent SMS with temporary password to', phone);
+            } catch (smsError) {
+              console.error('[Register] Failed sending SMS notification:', smsError);
+            }
         }
       } catch (e) {
         console.error('[Register] Failed sending notifications:', e);

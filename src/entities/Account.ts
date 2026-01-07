@@ -11,6 +11,7 @@ import {
 import { User } from './User';
 import { Transaction } from './Transaction';
 
+@Index(['userId', 'accountType'], { unique: true })
 @Entity({ name: 'accounts' })
 export class Account {
   // ========== Core Identification Fields ==========

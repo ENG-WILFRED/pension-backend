@@ -162,25 +162,24 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     
-    // Fetch user's accounts with their bank details
+    // Fetch all bank details from user's accounts
     const accountRepo = AppDataSource.getRepository(Account);
-    const bankDetailsRepo = AppDataSource.getRepository(BankDetails);
+    const accounts = await accountRepo.find({
+      where: { userId: id } as any,
+      select: {
+        id: true,
+        accountNumber: true,
+        accountType: true,
+        bankAccountName: true,
+        bankName: true,
+        bankBranchName: true,
+        bankBranchCode: true,
+        bankAccountNumber: true,
+      } as any,
+    });
     
-    const accounts = await accountRepo.find({ where: { userId: id } as any });
-    
-    const accountsWithBankDetails = await Promise.all(
-      accounts.map(async (account) => {
-        const bankDetails = await bankDetailsRepo.findOne({ 
-          where: { accountId: account.id } as any 
-        });
-        return {
-          account,
-          bankDetails: bankDetails || null
-        };
-      })
-    );
-    
-    return res.json({ success: true, user, accounts: accountsWithBankDetails });
+    const userWithBankDetails = { ...user, bankDetails: accounts };
+    return res.json({ success: true, user: userWithBankDetails });
   } catch (error) {
     console.error('Get user error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
