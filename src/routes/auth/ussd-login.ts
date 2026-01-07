@@ -63,14 +63,7 @@ const ussdSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, 'PIN must be 4 digits'),
 });
 
-function computeAge(dob?: string | null): number | undefined {
-  if (!dob) return undefined;
-  const d = new Date(dob);
-  if (isNaN(d.getTime())) return undefined;
-  const diff = Date.now() - d.getTime();
-  const ageDt = new Date(diff);
-  return Math.abs(ageDt.getUTCFullYear() - 1970);
-}
+import { computeAge } from './utils';
 
 router.post('/ussd-login', async (req: Request, res: Response) => {
   try {

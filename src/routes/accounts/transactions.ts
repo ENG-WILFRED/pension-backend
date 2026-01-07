@@ -89,4 +89,43 @@ router.get('/:id/transactions', requireAuth, async (req: AuthRequest, res: Respo
   }
 });
 
+/**
+ * GET /api/accounts/transactions?accountId=123&limit=50&page=1&sort=desc
+ * Accepts `accountId` as a required query parameter. Useful when the client wants to select
+ * which of their multiple accounts to fetch transactions for.
+ */
+router.get('/transactions', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const accountId = Number(req.query.accountId);
+    if (!accountId || isNaN(accountId)) return res.status(400).json({ success: false, error: 'Please provide a valid accountId query parameter' });
+
+    const caller = await prisma.user.findUnique({ where: { id: (req.user as any).userId } });
+    if (!caller) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    const account = await accountRepo.findOne({ where: { id: accountId } });
+    if (!account) return res.status(404).json({ success: false, error: 'Account not found' });
+    if (caller.role !== 'admin' && account.userId !== caller.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const limit = Math.min(parseInt((req.query.limit as string) || '50', 10) || 50, 1000);
+    const page = Math.max(parseInt((req.query.page as string) || '1', 10) || 1, 1);
+    const sort = (req.query.sort as string)?.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const skip = (page - 1) * limit;
+
+    const transactions = await transactionRepo.find({
+      where: { accountId } as any,
+      relations: ['account', 'user'],
+      order: { createdAt: sort as any },
+      take: limit,
+      skip,
+    });
+
+    return res.json({ success: true, transactions, meta: { limit, page, sort: sort.toLowerCase(), accountId } });
+  } catch (error) {
+    console.error('Get account transactions (query) error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 export default router;

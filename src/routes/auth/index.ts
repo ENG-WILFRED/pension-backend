@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import registerRoutes from './register';
+import registerRoutes from './register/index';
 import loginRoutes from './login';
 import promoteRoutes from './promote';
 import passwordRoutes from './password';
