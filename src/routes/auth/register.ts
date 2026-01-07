@@ -656,7 +656,7 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
           }
           console.log('[Register] Re-used existing pension account for user', user.id);
         } else {
-          // Create account without accountNumber so we can obtain numeric id
+          // Create account without bank detail columns (these live in bank_details table)
           const account = accountRepo.create({
             userId: user.id,
             accountType,
@@ -669,16 +669,27 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
             lockedBalance: 0,
             kycVerified,
             complianceStatus,
-            // bank details (optional)
-            bankAccountName: bankAccountName ?? null,
-            bankName: bankName ?? null,
-            // bankAccountNumber is the customer's bank account; pension accountNumber is generated below
-            bankAccountNumber: bankAccountNumber ?? null,
-            bankBranchName: bankBranchName ?? null,
-            bankBranchCode: bankBranchCode ?? null,
           });
           // Save to obtain numeric auto-increment id
           createdAccount = await accountRepo.save(account);
+
+          // If bank details were provided at registration, persist them in bank_details table
+          try {
+            if (bankAccountName || bankAccountNumber || bankBranchName || bankBranchCode) {
+              const bankDetailsRepo = AppDataSource.getRepository(BankDetails);
+              const bd = bankDetailsRepo.create({
+                accountId: createdAccount.id,
+                bankAccountName: bankAccountName ?? null,
+                bankAccountNumber: bankAccountNumber ?? null,
+                bankBranchName: bankBranchName ?? null,
+                bankBranchCode: bankBranchCode ?? null,
+              });
+              await bankDetailsRepo.save(bd);
+            }
+          } catch (bdErr) {
+            console.error('[Register] Failed to save bank details:', bdErr);
+          }
+
           // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
           if (!createdAccount.accountNumber) {
             const padded = String(createdAccount.id).padStart(8, '0');

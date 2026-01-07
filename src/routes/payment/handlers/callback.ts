@@ -296,14 +296,27 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
                 lockedBalance: 0,
                 kycVerified: meta.kycVerified || false,
                 complianceStatus: meta.complianceStatus || 'PENDING',
-                // bank details (optional)
-                bankAccountName: meta.bankAccountName ?? null,
-                bankAccountNumber: meta.bankAccountNumber ?? null,
-                bankBranchName: meta.bankBranchName ?? null,
-                bankBranchCode: meta.bankBranchCode ?? null,
               });
               // Save to obtain numeric auto-increment id
               createdAccount = await accountRepo.save(account);
+
+              // Persist bank details separately if provided
+              try {
+                if (meta.bankAccountName || meta.bankAccountNumber || meta.bankBranchName || meta.bankBranchCode) {
+                  const bankDetailsRepo = AppDataSource.getRepository(BankDetails);
+                  const bd = bankDetailsRepo.create({
+                    accountId: createdAccount.id,
+                    bankAccountName: meta.bankAccountName ?? null,
+                    bankAccountNumber: meta.bankAccountNumber ?? null,
+                    bankBranchName: meta.bankBranchName ?? null,
+                    bankBranchCode: meta.bankBranchCode ?? null,
+                  });
+                  await bankDetailsRepo.save(bd);
+                }
+              } catch (bdErr) {
+                console.error('[M-Pesa Callback] Failed to save bank details:', bdErr);
+              }
+
               // If no accountNumber was provided, set accountNumber as zero-padded 8-digit string from id
               if (!createdAccount.accountNumber) {
                 const padded = String(createdAccount.id).padStart(8, '0');
