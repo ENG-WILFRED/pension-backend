@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 import AppDataSource from '../lib/data-source';
 import { Account } from '../entities/Account';
+import { BankDetails } from '../entities/BankDetails';
 import { hashPassword } from '../lib/auth';
 import requireAuth, { AuthRequest } from '../middleware/auth';
 
@@ -218,7 +219,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
  *                 type: string
  *     responses:
  *       '200':
- *         description: Updated account with bank details
+ *         description: Updated bank details
  *       '400':
  *         description: Invalid input
  *       '401':
@@ -244,6 +245,9 @@ router.put('/:id/bank-details', requireAuth, async (req: AuthRequest, res: Respo
     const accountEntity: any = await accountRepo.findOne({ where: { userId: id, accountStatus: 'ACTIVE' } as any });
     if (!accountEntity) return res.status(404).json({ success: false, error: 'No active account found for user' });
 
+    const bankDetailsRepo = AppDataSource.getRepository(BankDetails);
+    let bankDetails: BankDetails | null = await bankDetailsRepo.findOne({ where: { accountId: accountEntity.id } as any });
+
     const updateData: any = {};
     if (bankAccountName !== undefined) updateData.bankAccountName = bankAccountName;
     if (bankAccountNumber !== undefined) updateData.bankAccountNumber = bankAccountNumber;
@@ -252,9 +256,19 @@ router.put('/:id/bank-details', requireAuth, async (req: AuthRequest, res: Respo
 
     if (Object.keys(updateData).length === 0) return res.status(400).json({ success: false, error: 'No bank details provided' });
 
-    await accountRepo.update(accountEntity.id, updateData);
-    const updated = await accountRepo.findOneBy({ id: accountEntity.id } as any);
-    return res.json({ success: true, account: updated });
+    if (bankDetails) {
+      await bankDetailsRepo.update(bankDetails.id, updateData);
+      bankDetails = (await bankDetailsRepo.findOneBy({ id: bankDetails.id } as any)) as BankDetails;
+    } else {
+      const newBankDetails = bankDetailsRepo.create({
+        accountId: accountEntity.id,
+        ...updateData
+      });
+      const savedBankDetails = await bankDetailsRepo.save(newBankDetails);
+      bankDetails = (Array.isArray(savedBankDetails) ? savedBankDetails[0] : savedBankDetails) as BankDetails;
+    }
+
+    return res.json({ success: true, bankDetails });
   } catch (error) {
     console.error('Update bank details error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });

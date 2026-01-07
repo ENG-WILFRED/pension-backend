@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../../../lib/prisma';
 import AppDataSource from '../../../lib/data-source';
 import { Account } from '../../../entities/Account';
+import { BankDetails } from '../../../entities/BankDetails';
 
 /**
  * @swagger

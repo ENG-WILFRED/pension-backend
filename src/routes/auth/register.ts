@@ -7,6 +7,7 @@ import { hashPassword } from '../../lib/auth';
 import axios from 'axios';
 import AppDataSource from '../../lib/data-source';
 import { Account } from '../../entities/Account';
+import { BankDetails } from '../../entities/BankDetails';
 
 // Poll payment gateway /health until it returns { status: 'ok' } or timeout
 async function waitForPaymentGatewayHealth(baseUrl: string, timeoutMs = 60_000, intervalMs = 1000): Promise<boolean> {
