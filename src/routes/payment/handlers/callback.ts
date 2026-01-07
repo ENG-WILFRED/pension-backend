@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../../../lib/prisma';
 import AppDataSource from '../../../lib/data-source';
 import { Account } from '../../../entities/Account';
+import { BankDetails } from '../../../entities/BankDetails';
 
 /**
  * @swagger
@@ -285,11 +286,6 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
               lockedBalance: 0,
               kycVerified: meta.kycVerified || false,
               complianceStatus: meta.complianceStatus || 'PENDING',
-              // bank details (optional)
-              bankAccountName: meta.bankAccountName ?? null,
-              bankAccountNumber: meta.bankAccountNumber ?? null,
-              bankBranchName: meta.bankBranchName ?? null,
-              bankBranchCode: meta.bankBranchCode ?? null,
             });
             // Save to obtain numeric auto-increment id
             createdAccount = await accountRepo.save(account);
@@ -299,6 +295,20 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
               createdAccount.accountNumber = padded;
               await accountRepo.save(createdAccount);
             }
+
+            // Create bank details if provided
+            if (meta.bankAccountName || meta.bankAccountNumber || meta.bankBranchName || meta.bankBranchCode) {
+              const bankDetailsRepo = AppDataSource.getRepository(BankDetails);
+              const bankDetails = bankDetailsRepo.create({
+                accountId: createdAccount.id,
+                bankAccountName: meta.bankAccountName ?? undefined,
+                bankAccountNumber: meta.bankAccountNumber ?? undefined,
+                bankBranchName: meta.bankBranchName ?? undefined,
+                bankBranchCode: meta.bankBranchCode ?? undefined,
+              });
+              await bankDetailsRepo.save(bankDetails);
+            }
+
             console.log(`[M-Pesa Callback] Auto-created default pension account ${createdAccount.id} for user ${user.id}`);
           } catch (accountError) {
             console.error('[M-Pesa Callback] Failed to auto-create account:', accountError);

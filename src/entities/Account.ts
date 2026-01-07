@@ -24,19 +24,6 @@ export class Account {
   @Column({ unique: true, nullable: true })
   accountNumber?: string;
 
-  // Bank details (optional)
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  bankAccountName?: string;
-
-  @Column({ type: 'varchar', length: 64, nullable: true })
-  bankBranchName?: string;
-
-  @Column({ type: 'varchar', length: 32, nullable: true })
-  bankBranchCode?: string;
-
-  @Column({ type: 'varchar', length: 64, nullable: true })
-  bankAccountNumber?: string;
-
   @ManyToOne(() => User, (user) => user.accounts, { onDelete: 'CASCADE' })
   user!: User;
 
@@ -170,4 +157,7 @@ export class Account {
   // ========== Relations ==========
   @OneToMany(() => Transaction, (transaction) => transaction.account)
   transactions!: Transaction[];
+
+  @OneToMany('BankDetails', 'account')
+  bankDetails!: any[];
 }

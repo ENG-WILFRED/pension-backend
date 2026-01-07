@@ -7,6 +7,7 @@ import { hashPassword } from '../../lib/auth';
 import axios from 'axios';
 import AppDataSource from '../../lib/data-source';
 import { Account } from '../../entities/Account';
+import { BankDetails } from '../../entities/BankDetails';
 
 // Poll payment gateway /health until it returns { status: 'ok' } or timeout
 async function waitForPaymentGatewayHealth(baseUrl: string, timeoutMs = 60_000, intervalMs = 1000): Promise<boolean> {
@@ -649,12 +650,6 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
           lockedBalance: 0,
           kycVerified,
           complianceStatus,
-          // bank details (optional)
-          bankAccountName: bankAccountName ?? null,
-          // bankAccountNumber is the customer's bank account; pension accountNumber is generated below
-          bankAccountNumber: bankAccountNumber ?? null,
-          bankBranchName: bankBranchName ?? null,
-          bankBranchCode: bankBranchCode ?? null,
         });
         // Save to obtain numeric auto-increment id
         createdAccount = await accountRepo.save(account);
@@ -664,6 +659,20 @@ router.get('/register/status/:transactionId', async (req: Request, res: Response
           createdAccount.accountNumber = padded;
           await accountRepo.save(createdAccount);
         }
+
+        // Create bank details if provided
+        if (bankAccountName || bankAccountNumber || bankBranchName || bankBranchCode) {
+          const bankDetailsRepo = AppDataSource.getRepository(BankDetails);
+          const bankDetails = bankDetailsRepo.create({
+            accountId: createdAccount.id,
+            bankAccountName: bankAccountName ?? undefined,
+            bankAccountNumber: bankAccountNumber ?? undefined,
+            bankBranchName: bankBranchName ?? undefined,
+            bankBranchCode: bankBranchCode ?? undefined,
+          });
+          await bankDetailsRepo.save(bankDetails);
+        }
+
         console.log('[Register] Auto-created default pension account for user', user.id);
       } catch (accountError) {
         console.error('[Register] Failed to auto-create account:', accountError);

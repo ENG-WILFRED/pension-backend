@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { User } from '../entities/User';
 import { Transaction } from '../entities/Transaction';
 import { Account } from '../entities/Account';
+import { BankDetails } from '../entities/BankDetails';
 import { TermsAndConditions } from '../entities/TermsAndConditions';
 import { AccountType } from '../entities/AccountType';
 import { Report } from '../entities/Report';
@@ -23,7 +24,7 @@ export default new DataSource({
   url: DATABASE_URL,
   synchronize: false,
   logging: false,
-  entities: [User, Transaction, Account, TermsAndConditions, AccountType, Report],
+  entities: [User, Transaction, Account, BankDetails, TermsAndConditions, AccountType, Report],
   migrations: ['dist/migrations/*.js'],
   subscribers: [],
   ssl: enableSsl ? { rejectUnauthorized: false } : false,

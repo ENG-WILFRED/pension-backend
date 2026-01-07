@@ -7,6 +7,7 @@ import earningsRoutes from './earnings';
 import withdrawRoutes from './withdraw';
 import statusRoutes from './status';
 import summaryRoutes from './summary';
+import bankDetailsRoutes from './bank-details';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/', earningsRoutes);
 router.use('/', withdrawRoutes);
 router.use('/', statusRoutes);
 router.use('/', summaryRoutes);
+router.use('/', bankDetailsRoutes);
 
 export default router;
