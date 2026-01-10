@@ -28,6 +28,109 @@ const router = Router();
  *             required:
  *               - email
  *               - phone
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: User email address
+ *               phone:
+ *                 type: string
+ *                 description: User phone number (required for M-Pesa payment)
+ *               firstName:
+ *                 type: string
+ *                 description: User first name
+ *               lastName:
+ *                 type: string
+ *                 description: User last name
+ *               dateOfBirth:
+ *                 type: string
+ *                 description: User date of birth (ISO 8601 format)
+ *               gender:
+ *                 type: string
+ *                 description: User gender
+ *               maritalStatus:
+ *                 type: string
+ *                 description: User marital status
+ *               spouseName:
+ *                 type: string
+ *                 description: Spouse name
+ *               spouseDob:
+ *                 type: string
+ *                 description: Spouse date of birth (ISO 8601 format)
+ *               children:
+ *                 type: array
+ *                 description: Array of children
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                       description: Child name
+ *                     dob:
+ *                       type: string
+ *                       description: Child date of birth (ISO 8601 format)
+ *               nationalId:
+ *                 type: string
+ *                 description: User national ID
+ *               address:
+ *                 type: string
+ *                 description: User residential address
+ *               city:
+ *                 type: string
+ *                 description: User city
+ *               country:
+ *                 type: string
+ *                 description: User country
+ *               occupation:
+ *                 type: string
+ *                 description: User occupation
+ *               employer:
+ *                 type: string
+ *                 description: User employer name
+ *               salary:
+ *                 type: number
+ *                 description: User annual salary
+ *               contributionRate:
+ *                 type: number
+ *                 description: Contribution rate percentage
+ *               retirementAge:
+ *                 type: number
+ *                 description: Intended retirement age
+ *               accountType:
+ *                 type: string
+ *                 enum: ['MANDATORY', 'VOLUNTARY', 'EMPLOYER', 'SAVINGS', 'WITHDRAWAL', 'BENEFITS']
+ *                 default: MANDATORY
+ *                 description: Type of account
+ *               riskProfile:
+ *                 type: string
+ *                 enum: ['LOW', 'MEDIUM', 'HIGH']
+ *                 default: MEDIUM
+ *                 description: Investment risk profile
+ *               currency:
+ *                 type: string
+ *                 minLength: 3
+ *                 maxLength: 3
+ *                 default: KES
+ *                 description: Currency code (ISO 4217)
+ *               accountStatus:
+ *                 type: string
+ *                 enum: ['ACTIVE', 'SUSPENDED', 'CLOSED', 'FROZEN', 'DECEASED']
+ *                 default: ACTIVE
+ *                 description: Initial account status
+ *               kycVerified:
+ *                 type: boolean
+ *                 default: false
+ *                 description: KYC verification status
+ *               complianceStatus:
+ *                 type: string
+ *                 enum: ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']
+ *                 default: PENDING
+ *                 description: Compliance check status
+ *               pin:
+ *                 type: string
+ *                 minLength: 4
+ *                 maxLength: 4
+ *                 description: 4-digit PIN for the account
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
