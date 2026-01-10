@@ -280,6 +280,49 @@ router.post('/register', async (req: Request, res: Response) => {
         },
       });
 
+      // Create user and account immediately after transaction
+      let createdUser: any = null;
+      let createdAccount: any = null;
+      try {
+        const result = await createUserWithAccount(
+          {
+            email,
+            phone,
+            firstName,
+            hashedPin,
+            ...validation.data,
+          },
+          {
+            accountType: accountType || 'MANDATORY',
+            accountStatus: accountStatus || 'ACTIVE',
+            riskProfile: riskProfile || 'MEDIUM',
+            currency: currency || 'KES',
+            kycVerified: kycVerified || false,
+            complianceStatus: complianceStatus || 'PENDING',
+          }
+        );
+        createdUser = result.user;
+        createdAccount = result.createdAccount;
+
+        // Link transaction to user
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: { userId: createdUser.id },
+        });
+
+        // Send welcome notifications
+        await sendWelcomeNotifications(
+          email,
+          phone,
+          firstName || 'User',
+          result.temporaryPassword,
+          createdAccount?.accountNumber
+        );
+      } catch (userCreationError) {
+        console.error('[Register] Failed to create user or send notifications:', userCreationError);
+        // Don't fail the registration if user creation fails - transaction is already created
+      }
+
       return res.json({
         success: true,
         status: 'payment_initiated',
@@ -287,6 +330,21 @@ router.post('/register', async (req: Request, res: Response) => {
         transactionId: transaction.id,
         checkoutRequestId: checkoutId,
         statusCheckUrl: `/api/auth/register/status/${transaction.id}`,
+        ...(createdUser && {
+          user: {
+            id: createdUser.id,
+            email: createdUser.email,
+            firstName: createdUser.firstName,
+            lastName: createdUser.lastName,
+          },
+        }),
+        ...(createdAccount && {
+          account: {
+            id: createdAccount.id,
+            accountNumber: createdAccount.accountNumber,
+            accountType: createdAccount.accountType,
+          },
+        }),
       });
     }
   } catch (paymentError) {
