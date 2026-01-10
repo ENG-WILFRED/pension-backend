@@ -131,6 +131,83 @@ const router = Router();
  *                 minLength: 4
  *                 maxLength: 4
  *                 description: 4-digit PIN for the account
+ *     responses:
+ *       200:
+ *         description: Payment initiated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   description: Request success status
+ *                 status:
+ *                   type: string
+ *                   description: Payment initiation status
+ *                 message:
+ *                   type: string
+ *                   description: Status message
+ *                 transactionId:
+ *                   type: string
+ *                   description: Unique transaction identifier
+ *                 checkoutRequestId:
+ *                   type: string
+ *                   description: M-Pesa checkout request ID
+ *                 statusCheckUrl:
+ *                   type: string
+ *                   description: URL to check payment status
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 error:
+ *                   type: string
+ *                 issues:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       409:
+ *         description: Email or phone number already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 error:
+ *                   type: string
+ *                 field:
+ *                   type: string
+ *                   description: Field that caused the conflict (email or phone)
+ *       503:
+ *         description: Payment gateway unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 error:
+ *                   type: string
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 error:
+ *                   type: string
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
