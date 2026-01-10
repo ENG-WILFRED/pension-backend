@@ -97,11 +97,12 @@ export async function createUserWithAccount(params: CreateUserParams, accountCon
 
 export async function sendWelcomeNotifications(email: string, phone: string, firstName: string, tempPassword: string, accountNumber?: string) {
   try {
+    console.log(accountNumber,tempPassword)
     const notificationData = {
       name: firstName || 'User',
       temp_password: tempPassword,
       link: 'https://transactions-k6gk.onrender.com/login',
-      account_number: accountNumber || null,
+      account_number: accountNumber,
     };
 
     await notify({
