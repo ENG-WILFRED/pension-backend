@@ -338,56 +338,6 @@ router.post('/register', async (req: Request, res: Response) => {
         },
       });
 
-      // Create user and account immediately after transaction
-      let createdUser: any = null;
-      let createdAccount: any = null;
-      try {
-        // Filter out optional fields that are not provided or are placeholder values
-        const userDataToCreate = Object.entries(validation.data).reduce((acc, [key, value]) => {
-          // Only include non-empty string values and other types
-          if (value !== undefined && value !== null && value !== '' && value !== 'string') {
-            acc[key as keyof typeof validation.data] = value;
-          }
-          return acc;
-        }, {} as any);
-
-        const result = await createUserWithAccount(
-          {
-            email,
-            phone,
-            ...userDataToCreate,
-          },
-          {
-            accountType: userDataToCreate.accountType || 'MANDATORY',
-            accountStatus: userDataToCreate.accountStatus || 'ACTIVE',
-            riskProfile: userDataToCreate.riskProfile || 'MEDIUM',
-            currency: userDataToCreate.currency || 'KES',
-            kycVerified: userDataToCreate.kycVerified || false,
-            complianceStatus: userDataToCreate.complianceStatus || 'PENDING',
-          }
-        );
-        createdUser = result.user;
-        createdAccount = result.createdAccount;
-
-        // Link transaction to user
-        await prisma.transaction.update({
-          where: { id: transaction.id },
-          data: { userId: createdUser.id },
-        });
-
-        // Send welcome notifications
-        await sendWelcomeNotifications(
-          email,
-          phone,
-          userDataToCreate.firstName || 'User',
-          result.temporaryPassword,
-          createdAccount?.accountNumber
-        );
-      } catch (userCreationError) {
-        console.error('[Register] Failed to create user or send notifications:', userCreationError);
-        // Don't fail the registration if user creation fails - transaction is already created
-      }
-
       return res.json({
         success: true,
         status: 'payment_initiated',
@@ -395,21 +345,6 @@ router.post('/register', async (req: Request, res: Response) => {
         transactionId: transaction.id,
         checkoutRequestId: checkoutId,
         statusCheckUrl: `/api/auth/register/status/${transaction.id}`,
-        ...(createdUser && {
-          user: {
-            id: createdUser.id,
-            email: createdUser.email,
-            firstName: createdUser.firstName,
-            lastName: createdUser.lastName,
-          },
-        }),
-        ...(createdAccount && {
-          account: {
-            id: createdAccount.id,
-            accountNumber: createdAccount.accountNumber,
-            accountType: createdAccount.accountType,
-          },
-        }),
       });
     }
   } catch (paymentError) {

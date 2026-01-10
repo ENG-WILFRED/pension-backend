@@ -3,6 +3,7 @@ import prisma from '../../../lib/prisma';
 import AppDataSource from '../../../lib/data-source';
 import { Account } from '../../../entities/Account';
 import { createOrUpdateUserFromMetadata, createOrReuseAccount } from './services/registration';
+import { notify } from '../../../lib/notification';
 
 export const handlePaymentCallback = async (req: Request, res: Response) => {
   try {
@@ -116,6 +117,34 @@ export const handlePaymentCallback = async (req: Request, res: Response) => {
           createdAccount = await createOrReuseAccount(user.id, meta);
         } catch (accountError) {
           console.error('[M-Pesa Callback] Failed to auto-create account:', accountError);
+        }
+
+        // Send welcome notifications after successful registration
+        try {
+          const notificationData = {
+            name: meta.firstName || 'User',
+            temp_password: meta.temporaryPasswordPlain,
+            link: 'https://transactions-k6gk.onrender.com/login',
+            account_number: createdAccount?.accountNumber,
+          };
+
+          await notify({
+            to: meta.email,
+            channel: 'email',
+            template: 'welcome',
+            data: notificationData,
+          });
+
+          await notify({
+            to: meta.phone,
+            channel: 'sms',
+            template: 'welcome',
+            data: notificationData,
+          });
+
+          console.log('[M-Pesa Callback] Sent welcome notifications to', meta.email, meta.phone);
+        } catch (notificationErr) {
+          console.error('[M-Pesa Callback] Failed sending welcome notifications:', notificationErr);
         }
       } catch (userErr) {
         console.error('[M-Pesa Callback] Error processing registration:', userErr);
