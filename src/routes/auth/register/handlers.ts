@@ -44,19 +44,23 @@ const router = Router();
  *                 description: User last name
  *               dateOfBirth:
  *                 type: string
- *                 description: User date of birth (ISO 8601 format)
+ *                 format: date
+ *                 description: User date of birth (YYYY-MM-DD format)
  *               gender:
  *                 type: string
+ *                 enum: ['Male', 'Female', 'Other']
  *                 description: User gender
  *               maritalStatus:
  *                 type: string
+ *                 enum: ['Single', 'Married', 'Divorced', 'Widowed']
  *                 description: User marital status
  *               spouseName:
  *                 type: string
  *                 description: Spouse name
  *               spouseDob:
  *                 type: string
- *                 description: Spouse date of birth (ISO 8601 format)
+ *                 format: date
+ *                 description: Spouse date of birth (YYYY-MM-DD format)
  *               children:
  *                 type: array
  *                 description: Array of children
@@ -68,7 +72,8 @@ const router = Router();
  *                       description: Child name
  *                     dob:
  *                       type: string
- *                       description: Child date of birth (ISO 8601 format)
+ *                       format: date
+ *                       description: Child date of birth (YYYY-MM-DD format)
  *               nationalId:
  *                 type: string
  *                 description: User national ID
@@ -131,6 +136,37 @@ const router = Router();
  *                 minLength: 4
  *                 maxLength: 4
  *                 description: 4-digit PIN for the account
+ *           example:
+ *             email: john.doe@example.com
+ *             phone: "254793056960"
+ *             firstName: John
+ *             lastName: Doe
+ *             dateOfBirth: "1990-05-15"
+ *             gender: Male
+ *             maritalStatus: Married
+ *             spouseName: Jane Doe
+ *             spouseDob: "1992-08-20"
+ *             children:
+ *               - name: Jack Doe
+ *                 dob: "2015-03-10"
+ *               - name: Jill Doe
+ *                 dob: "2018-07-22"
+ *             nationalId: "12345678"
+ *             address: 123 Nairobi Street
+ *             city: Nairobi
+ *             country: Kenya
+ *             occupation: Software Engineer
+ *             employer: Tech Company Ltd
+ *             salary: 120000
+ *             contributionRate: 5.5
+ *             retirementAge: 65
+ *             accountType: MANDATORY
+ *             riskProfile: MEDIUM
+ *             currency: KES
+ *             accountStatus: ACTIVE
+ *             kycVerified: false
+ *             complianceStatus: PENDING
+ *             pin: "1234"
  *     responses:
  *       200:
  *         description: Payment initiated successfully
@@ -157,6 +193,28 @@ const router = Router();
  *                 statusCheckUrl:
  *                   type: string
  *                   description: URL to check payment status
+ *                 user:
+ *                   type: object
+ *                   description: Created user details
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     firstName:
+ *                       type: string
+ *                     lastName:
+ *                       type: string
+ *                 account:
+ *                   type: object
+ *                   description: Created account details
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     accountNumber:
+ *                       type: string
+ *                     accountType:
+ *                       type: string
  *       400:
  *         description: Validation error
  *         content:
@@ -284,21 +342,28 @@ router.post('/register', async (req: Request, res: Response) => {
       let createdUser: any = null;
       let createdAccount: any = null;
       try {
+        // Filter out optional fields that are not provided or are placeholder values
+        const userDataToCreate = Object.entries(validation.data).reduce((acc, [key, value]) => {
+          // Only include non-empty string values and other types
+          if (value !== undefined && value !== null && value !== '' && value !== 'string') {
+            acc[key as keyof typeof validation.data] = value;
+          }
+          return acc;
+        }, {} as any);
+
         const result = await createUserWithAccount(
           {
             email,
             phone,
-            firstName,
-            hashedPin,
-            ...validation.data,
+            ...userDataToCreate,
           },
           {
-            accountType: accountType || 'MANDATORY',
-            accountStatus: accountStatus || 'ACTIVE',
-            riskProfile: riskProfile || 'MEDIUM',
-            currency: currency || 'KES',
-            kycVerified: kycVerified || false,
-            complianceStatus: complianceStatus || 'PENDING',
+            accountType: userDataToCreate.accountType || 'MANDATORY',
+            accountStatus: userDataToCreate.accountStatus || 'ACTIVE',
+            riskProfile: userDataToCreate.riskProfile || 'MEDIUM',
+            currency: userDataToCreate.currency || 'KES',
+            kycVerified: userDataToCreate.kycVerified || false,
+            complianceStatus: userDataToCreate.complianceStatus || 'PENDING',
           }
         );
         createdUser = result.user;
@@ -314,7 +379,7 @@ router.post('/register', async (req: Request, res: Response) => {
         await sendWelcomeNotifications(
           email,
           phone,
-          firstName || 'User',
+          userDataToCreate.firstName || 'User',
           result.temporaryPassword,
           createdAccount?.accountNumber
         );
