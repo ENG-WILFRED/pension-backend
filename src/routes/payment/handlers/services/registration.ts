@@ -110,37 +110,3 @@ export async function createOrReuseAccount(userId: string, metadata: any): Promi
 
   return createdAccount;
 }
-
-export async function sendWelcomeNotifications(email: string, phone: string, firstName: string, temporaryPasswordPlain: string) {
-  try {
-    await notify({
-      to: email,
-      channel: 'email',
-      template: 'welcome',
-      data: {
-        name: firstName || 'User',
-        temp_password: temporaryPasswordPlain,
-        link: process.env.FRONTEND_URL || 'https://transactions-k6gk.onrender.com/login',
-      },
-    });
-    console.log(`[Payment Callback] Sent welcome email to ${email}`);
-  } catch (emailError) {
-    console.error(`[Payment Callback] Failed sending email:`, emailError);
-  }
-
-  try {
-    await notify({
-      to: phone,
-      channel: 'sms',
-      template: 'welcome',
-      data: {
-        name: firstName || 'User',
-        temp_password: temporaryPasswordPlain,
-        link: process.env.FRONTEND_URL || 'https://transactions-k6gk.onrender.com/login',
-      },
-    });
-    console.log(`[Payment Callback] Sent welcome SMS to ${phone}`);
-  } catch (smsError) {
-    console.error(`[Payment Callback] Failed sending SMS:`, smsError);
-  }
-}
