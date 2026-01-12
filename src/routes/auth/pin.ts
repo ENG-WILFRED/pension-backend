@@ -118,8 +118,8 @@ import { hashPassword } from '../../lib/auth';
  *   post:
  *     tags:
  *       - Authentication
- *     summary: Set PIN directly
- *     description: Set a new 4-digit PIN using phone number. No authentication or OTP required.
+ *     summary: Request OTP to set PIN
+ *     description: Send OTP to user's phone to set a new 4-digit PIN. Only works if PIN is not already set.
  *     requestBody:
  *       required: true
  *       content:
@@ -139,9 +139,44 @@ import { hashPassword } from '../../lib/auth';
  *                 example: "1234"
  *     responses:
  *       '200':
- *         description: PIN set successfully
+ *         description: OTP sent to phone
  *       '400':
- *         description: Invalid PIN format or missing fields
+ *         description: Invalid PIN format, missing fields, or PIN already set
+ *       '404':
+ *         description: User not found
+ *       '500':
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/auth/set-pin/verify:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Verify OTP and confirm PIN
+ *     description: Verify the OTP sent to phone and confirm the pending PIN. The pending PIN will be moved to the confirmed PIN field.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - otp
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "+254712345678"
+ *               otp:
+ *                 type: string
+ *                 minLength: 6
+ *     responses:
+ *       '200':
+ *         description: PIN confirmed successfully
+ *       '400':
+ *         description: Invalid input or OTP invalid/expired
  *       '404':
  *         description: User not found
  *       '500':
@@ -150,7 +185,7 @@ import { hashPassword } from '../../lib/auth';
 
 const router = Router();
 
-// POST /api/auth/set-pin - Set PIN directly (no auth, no OTP)
+// POST /api/auth/set-pin - Request OTP to set PIN
 router.post('/set-pin', async (req: Request, res: Response) => {
   try {
     const { phone, newPin } = req.body;
@@ -166,16 +201,80 @@ router.post('/set-pin', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'PIN already exists. Try to change PIN instead.' });
     }
 
-    // Hash and set the PIN directly
-    const hashed = await hashPassword(newPin);
+    // Generate OTP and save
+    const otp = generateOtp(6);
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+    
+    // Hash the new PIN for temporary storage
+    const hashedPin = await hashPassword(newPin);
+    
     await prisma.user.update({ 
       where: { id: user.id }, 
-      data: { pin: hashed } 
+      data: { 
+        otpCode: otp, 
+        otpExpiry: expiry,
+        pendingPin: hashedPin // Store hashed PIN with pending status
+      } 
     });
+    console.log(`[Set PIN] OTP for user ${phone}: ${otp} (expires ${expiry.toISOString()})`);
 
-    return res.json({ success: true, message: 'PIN set successfully' });
+    // Send OTP via SMS
+    sendOtpNotification(user.phone, 'pin-set', 'sms', otp, user.firstName, 10).catch((e) =>
+      console.error('[Set PIN] Failed sending OTP notification:', e)
+    );
+
+    return res.json({ success: true, message: 'OTP sent to your phone' });
   } catch (error) {
     console.error('Set PIN error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/auth/set-pin/verify - Verify OTP and confirm PIN
+router.post('/set-pin/verify', async (req: Request, res: Response) => {
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, error: 'Phone and OTP are required' });
+    }
+
+    const user = await prisma.user.findFirst({ where: { phone } });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+    // Check if OTP exists
+    if (!user.otpCode) {
+      return res.status(400).json({ success: false, error: 'No OTP found. Request OTP first.' });
+    }
+
+    // Verify OTP expiry
+    if (user.otpExpiry && user.otpExpiry < new Date()) {
+      return res.status(400).json({ success: false, error: 'OTP expired' });
+    }
+
+    // Verify OTP code
+    if (user.otpCode !== otp) {
+      return res.status(400).json({ success: false, error: 'Invalid OTP' });
+    }
+
+    // Check if there's a pending PIN
+    if (!user.pendingPin) {
+      return res.status(400).json({ success: false, error: 'No pending PIN found' });
+    }
+
+    // OTP valid — move pending PIN to confirmed PIN
+    await prisma.user.update({ 
+      where: { id: user.id }, 
+      data: { 
+        pin: user.pendingPin, // Set the final PIN (confirmed)
+        otpCode: null, 
+        otpExpiry: null,
+        pendingPin: null // Clear pending PIN storage after confirmation
+      } 
+    });
+
+    return res.json({ success: true, message: 'PIN confirmed successfully' });
+  } catch (error) {
+    console.error('Set PIN verify error:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
@@ -194,6 +293,12 @@ router.post('/change-pin', requireAuth, async (req: AuthRequest, res: Response) 
     // Verify current PIN
     const match = await comparePasswords(currentPin, user.pin);
     if (!match) return res.status(400).json({ success: false, error: 'Current PIN is incorrect' });
+
+    // Prevent reuse of same PIN
+    const same = await comparePasswords(newPin, user.pin);
+    if (same) {
+      return res.status(400).json({ success: false, error: 'New PIN must be different' });
+    }
 
     const hashed = await hashPassword(newPin);
     await prisma.user.update({ where: { id: userId }, data: { pin: hashed } });

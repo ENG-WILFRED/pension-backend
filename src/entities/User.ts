@@ -24,6 +24,10 @@ export class User {
   @Column({ nullable: true })
   pin?: string;
 
+  // PIN pending verification (stores hashed PIN during pending state)
+  @Column({ nullable: true })
+  pendingPin?: string;
+
   @Column({ type: 'boolean', default: false })
   passwordIsTemporary!: boolean;
 
