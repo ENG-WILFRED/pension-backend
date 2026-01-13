@@ -24,8 +24,8 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install dumb-init
-RUN apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
+# Install dumb-init and build dependencies (needed for node-rdkafka and other native modules)
+RUN apt-get update && apt-get install -y dumb-init python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./

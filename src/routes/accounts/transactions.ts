@@ -14,7 +14,7 @@ const accountRepo = AppDataSource.getRepository(Account);
  * /api/accounts/{id}/transactions:
  *   get:
  *     tags:
- *       - Accounts
+ *       - Transactions
  *     summary: Get transactions for an account
  *     description: Returns transactions belonging to the specified account. Supports `limit`, `page`, and `sort` (asc|desc) query parameters.
  *     security:

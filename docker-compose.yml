@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -42,6 +40,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      REDIS_URL: ${REDIS_URL:-rediss://default:AV0PAAIncDE1NDEzYmZlNGFkMWE0ZjIyYTYzMjAwZTliNTlmYmZhOXAxMjM4MjM@winning-lionfish-23823.upstash.io:6379}
       NEXT_PUBLIC_PAYMENT_GATEWAY_URL: ${NEXT_PUBLIC_PAYMENT_GATEWAY_URL:-http://localhost:3001}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:5000}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@pension.com}
