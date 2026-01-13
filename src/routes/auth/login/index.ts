@@ -1,7 +1,15 @@
 import { Router } from 'express';
-import handlers from './handlers';
+import loginRouter from './login';
+import otpRouter from './otp';
+import passwordRouter from './password';
+import verifyRouter from './verify';
 
 const router = Router();
-router.use('/', handlers);
+
+// Login routes
+router.use('/', loginRouter);
+router.use('/login', otpRouter);
+router.use('/', passwordRouter);
+router.use('/auth', verifyRouter);
 
 export default router;

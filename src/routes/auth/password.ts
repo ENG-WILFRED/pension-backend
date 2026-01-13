@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../lib/prisma';
+import redis from '../../lib/redis';
 import { comparePasswords, generateToken } from '../../lib/auth';
 import { generateOtp } from '../../lib/otp';
 import { sendOtpNotification } from '../../lib/notification';
@@ -146,11 +147,10 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    // Generate OTP and save
+    // Generate OTP and store in Redis (10 minute expiry)
     const otp = generateOtp(6);
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
-    await prisma.user.update({ where: { id: user.id }, data: { otpCode: otp, otpExpiry: expiry } });
-    console.log(`[Forgot Password] OTP for user ${email}: ${otp} (expires ${expiry.toISOString()})`);
+    await redis.set(`password-reset:${user.id}`, otp, { EX: 600 });
+    console.log(`[Forgot Password] OTP for user ${email}: ${otp}`);
 
     // Send OTP via notification service using password-reset template
     sendOtpNotification(user.email, 'password-reset', 'email', otp, user.firstName, 10).catch((e) =>
@@ -173,17 +173,22 @@ router.post('/forgot-password/verify', async (req: Request, res: Response) => {
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !user.otpCode) return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid credentials' });
 
-    if (user.otpExpiry && user.otpExpiry < new Date()) {
-      return res.status(401).json({ success: false, error: 'OTP expired' });
+    // Get OTP from Redis
+    const storedOtp = await redis.get(`password-reset:${user.id}`);
+    if (!storedOtp) {
+      return res.status(401).json({ success: false, error: 'OTP expired or not found' });
     }
 
-    if (user.otpCode !== otp) return res.status(401).json({ success: false, error: 'Invalid OTP' });
+    if (storedOtp !== otp) {
+      return res.status(401).json({ success: false, error: 'Invalid OTP' });
+    }
 
-    // OTP valid — set new password and clear OTP
+    // OTP valid — set new password and clear OTP from Redis
     const hashed = await hashPassword(newPassword);
-    await prisma.user.update({ where: { id: user.id }, data: { password: hashed, passwordIsTemporary: false, otpCode: null, otpExpiry: null } });
+    await redis.del(`password-reset:${user.id}`);
+    await prisma.user.update({ where: { id: user.id }, data: { password: hashed, passwordIsTemporary: false } });
     return res.json({ success: true, message: 'Password reset successfully' });
   } catch (error) {
     console.error('Forgot password verify error:', error);

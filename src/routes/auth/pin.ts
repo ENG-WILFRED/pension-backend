@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../lib/prisma';
+import redis from '../../lib/redis';
 import { comparePasswords } from '../../lib/auth';
 import { generateOtp } from '../../lib/otp';
 import { sendOtpNotification } from '../../lib/notification';
@@ -201,9 +202,8 @@ router.post('/set-pin', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'PIN already exists. Try to change PIN instead.' });
     }
 
-    // Generate OTP and save
+    // Generate OTP and store in Redis
     const otp = generateOtp(6);
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
     
     // Hash the new PIN for temporary storage
     const hashedPin = await hashPassword(newPin);
@@ -211,12 +211,13 @@ router.post('/set-pin', async (req: Request, res: Response) => {
     await prisma.user.update({ 
       where: { id: user.id }, 
       data: { 
-        otpCode: otp, 
-        otpExpiry: expiry,
         pendingPin: hashedPin // Store hashed PIN with pending status
       } 
     });
-    console.log(`[Set PIN] OTP for user ${phone}: ${otp} (expires ${expiry.toISOString()})`);
+    
+    // Store OTP in Redis (10 minute expiry)
+    await redis.set(`pin-set:${user.id}`, otp, { EX: 600 });
+    console.log(`[Set PIN] OTP for user ${phone}: ${otp}`);
 
     // Send OTP via SMS
     sendOtpNotification(user.phone, 'pin-set', 'sms', otp, user.firstName, 10).catch((e) =>
@@ -241,18 +242,14 @@ router.post('/set-pin/verify', async (req: Request, res: Response) => {
     const user = await prisma.user.findFirst({ where: { phone } });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    // Check if OTP exists
-    if (!user.otpCode) {
+    // Get OTP from Redis
+    const storedOtp = await redis.get(`pin-set:${user.id}`);
+    if (!storedOtp) {
       return res.status(400).json({ success: false, error: 'No OTP found. Request OTP first.' });
     }
 
-    // Verify OTP expiry
-    if (user.otpExpiry && user.otpExpiry < new Date()) {
-      return res.status(400).json({ success: false, error: 'OTP expired' });
-    }
-
     // Verify OTP code
-    if (user.otpCode !== otp) {
+    if (storedOtp !== otp) {
       return res.status(400).json({ success: false, error: 'Invalid OTP' });
     }
 
@@ -262,12 +259,11 @@ router.post('/set-pin/verify', async (req: Request, res: Response) => {
     }
 
     // OTP valid — move pending PIN to confirmed PIN
+    await redis.del(`pin-set:${user.id}`);
     await prisma.user.update({ 
       where: { id: user.id }, 
       data: { 
         pin: user.pendingPin, // Set the final PIN (confirmed)
-        otpCode: null, 
-        otpExpiry: null,
         pendingPin: null // Clear pending PIN storage after confirmation
       } 
     });
@@ -318,11 +314,10 @@ router.post('/reset-pin', async (req: Request, res: Response) => {
     const user = await prisma.user.findFirst({ where: { phone } });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    // Generate OTP and save
+    // Generate OTP and store in Redis (10 minute expiry)
     const otp = generateOtp(6);
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
-    await prisma.user.update({ where: { id: user.id }, data: { otpCode: otp, otpExpiry: expiry } });
-    console.log(`[Reset PIN] OTP for user ${phone}: ${otp} (expires ${expiry.toISOString()})`);
+    await redis.set(`pin-reset:${user.id}`, otp, { EX: 600 });
+    console.log(`[Reset PIN] OTP for user ${phone}: ${otp}`);
 
     // Send OTP via notification service using pin-reset template to SMS
     sendOtpNotification(user.phone, 'pin-reset', 'sms', otp, user.firstName, 10).catch((e) =>
@@ -345,17 +340,22 @@ router.post('/reset-pin/verify', async (req: Request, res: Response) => {
     }
 
     const user = await prisma.user.findFirst({ where: { phone } });
-    if (!user || !user.otpCode) return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    if (!user) return res.status(401).json({ success: false, error: 'Invalid credentials' });
 
-    if (user.otpExpiry && user.otpExpiry < new Date()) {
-      return res.status(401).json({ success: false, error: 'OTP expired' });
+    // Get OTP from Redis
+    const storedOtp = await redis.get(`pin-reset:${user.id}`);
+    if (!storedOtp) {
+      return res.status(401).json({ success: false, error: 'OTP expired or not found' });
     }
 
-    if (user.otpCode !== otp) return res.status(401).json({ success: false, error: 'Invalid OTP' });
+    if (storedOtp !== otp) {
+      return res.status(401).json({ success: false, error: 'Invalid OTP' });
+    }
 
-    // OTP valid — set new PIN and clear OTP
+    // OTP valid — set new PIN and clear OTP from Redis
     const hashed = await hashPassword(newPin);
-    await prisma.user.update({ where: { id: user.id }, data: { pin: hashed, otpCode: null, otpExpiry: null } });
+    await redis.del(`pin-reset:${user.id}`);
+    await prisma.user.update({ where: { id: user.id }, data: { pin: hashed } });
     return res.json({ success: true, message: 'PIN reset successfully' });
   } catch (error) {
     console.error('Reset PIN verify error:', error);
