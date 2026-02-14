@@ -31,7 +31,8 @@
     "zod": "^3.22.4",
     "pdfkit": "^0.13.0",
     "get-stream": "^8.0.0",
-    "node-rdkafka": "^2.12.1"
+    "node-rdkafka": "^2.12.1",
+    "redis": "^4.6.11"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

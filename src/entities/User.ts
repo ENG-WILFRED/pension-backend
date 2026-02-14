@@ -72,12 +72,6 @@ export class User {
   @Column({ type: 'int', default: 0 })
   failedLoginAttempts!: number;
 
-  @Column({ nullable: true })
-  otpCode?: string;
-
-  @Column({ type: 'timestamp with time zone', nullable: true })
-  otpExpiry?: Date;
-
   // Identity and contact
   @Column({ nullable: true })
   nationalId?: string;
