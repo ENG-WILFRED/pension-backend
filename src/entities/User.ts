@@ -24,6 +24,10 @@ export class User {
   @Column({ nullable: true })
   pin?: string;
 
+  // Pending PIN - used during PIN setup/reset process
+  @Column({ nullable: true })
+  pendingPin?: string;
+
   @Column({ type: 'boolean', default: false })
   passwordIsTemporary!: boolean;
 
