@@ -306,7 +306,7 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     if (mpesaResponse) {
-      const providerCheckoutId = mpesaResponse.data.data.CheckoutRequestID;
+      const providerCheckoutId = mpesaResponse.data.CheckoutRequestID;
       const checkoutId = providerCheckoutId ?? `CRID-${randomUUID()}`;
 
       const tempPassword = Math.random().toString(36).slice(2, 10);
