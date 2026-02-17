@@ -64,7 +64,8 @@ export async function createUserWithAccount(params: CreateUserParams, accountCon
     if (existing) {
       createdAccount = existing;
       if (!createdAccount.accountNumber) {
-        createdAccount.accountNumber = String(createdAccount.id).padStart(8, '0');
+        const { generateAccountNumber } = await import('../../../lib/account-utils');
+        createdAccount.accountNumber = generateAccountNumber(createdAccount.id, createdAccount.accountType);
         await accountRepo.save(createdAccount);
       }
     } else {
@@ -83,8 +84,8 @@ export async function createUserWithAccount(params: CreateUserParams, accountCon
       });
       createdAccount = await accountRepo.save(account);
       if (!createdAccount.accountNumber) {
-        const padded = String(createdAccount.id).padStart(8, '0');
-        createdAccount.accountNumber = padded;
+        const { generateAccountNumber } = await import('../../../lib/account-utils');
+        createdAccount.accountNumber = generateAccountNumber(createdAccount.id, createdAccount.accountType);
         await accountRepo.save(createdAccount);
       }
     }

@@ -63,7 +63,8 @@ export async function createOrReuseAccount(userId: string, metadata: any): Promi
   if (existing) {
     createdAccount = existing;
     if (!createdAccount.accountNumber) {
-      createdAccount.accountNumber = String(createdAccount.id).padStart(8, '0');
+      const { generateAccountNumber } = await import('../../../../lib/account-utils');
+      createdAccount.accountNumber = generateAccountNumber(createdAccount.id, createdAccount.accountType);
       await accountRepo.save(createdAccount);
     }
     console.log(`[Payment Callback] Re-used account ${createdAccount.id}`);
@@ -101,8 +102,8 @@ export async function createOrReuseAccount(userId: string, metadata: any): Promi
     }
 
     if (!createdAccount.accountNumber) {
-      const padded = String(createdAccount.id).padStart(8, '0');
-      createdAccount.accountNumber = padded;
+      const { generateAccountNumber } = await import('../../../../lib/account-utils');
+      createdAccount.accountNumber = generateAccountNumber(createdAccount.id, createdAccount.accountType);
       await accountRepo.save(createdAccount);
     }
     console.log(`[Payment Callback] Created account ${createdAccount.id}`);
